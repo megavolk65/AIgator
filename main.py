@@ -17,21 +17,23 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from PyQt6.QtWidgets import QApplication, QSystemTrayIcon, QMenu
 from PyQt6.QtGui import QIcon, QAction
-from PyQt6.QtCore import QTimer
+from PyQt6.QtCore import QObject, QTimer, pyqtSlot
 
 import config
 from src.overlay import OverlayWindow
 from src.hotkeys import HotkeyManager
 from src.game_detect import ContextDetector
 from src.screenshot import ScreenCapture
-from src.ai import YandexGPTClient, YandexVisionClient
+from src.ai.yandex_gpt_rest import YandexGPTRestClient
+from src.ai import YandexVisionClient
 
 
-class AIHelperApp:
+class AIHelperApp(QObject):
     """Главное приложение"""
     
     def __init__(self):
         self.app = QApplication(sys.argv)
+        super().__init__(self.app)
         self.app.setQuitOnLastWindowClosed(False)  # Не закрывать при скрытии окна
         
         # Инициализация компонентов
@@ -50,7 +52,7 @@ class AIHelperApp:
         self.context_detector = ContextDetector()
         
         # AI клиенты
-        self.gpt_client = YandexGPTClient()
+        self.gpt_client = YandexGPTRestClient()
         self.vision_client = YandexVisionClient()
         
         # Захват экрана
@@ -185,7 +187,8 @@ class AIHelperApp:
             self.overlay.activateWindow()
             self.overlay.input_field.setFocus()
     
-    def _on_tray_activated(self, reason):
+    @pyqtSlot(QSystemTrayIcon.ActivationReason)
+    def _on_tray_activated(self, reason: QSystemTrayIcon.ActivationReason):
         """Обработка клика по иконке трея"""
         if reason == QSystemTrayIcon.ActivationReason.Trigger:
             self._toggle_overlay()

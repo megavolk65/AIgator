@@ -67,6 +67,12 @@ class YandexGPTClient:
         self.temperature = config.TEMPERATURE
         self.max_tokens = config.MAX_TOKENS
         
+        # Путь к файлу с авторизованным ключом
+        self.auth_key_path = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+            "authorized_key.json"
+        )
+        
         self.history = ChatHistory()
         self._sdk: Optional[YCloudML] = None
         self._model = None
@@ -79,15 +85,31 @@ class YandexGPTClient:
             self._error_message = "yandex-cloud-ml-sdk не установлен. Выполните: pip install yandex-cloud-ml-sdk"
             return False
         
-        if not self.folder_id or not self.api_key:
-            self._error_message = "Не указаны YANDEX_FOLDER_ID или YANDEX_API_KEY в config.py"
+        if not self.folder_id:
+            self._error_message = "Не указан YANDEX_FOLDER_ID в config.py"
             return False
         
         try:
-            self._sdk = YCloudML(
-                folder_id=self.folder_id,
-                auth=self.api_key,
-            )
+            # Пробуем использовать авторизованный ключ если он существует
+            if os.path.exists(self.auth_key_path):
+                import json
+                with open(self.auth_key_path, 'r') as f:
+                    service_account_key = json.load(f)
+                
+                self._sdk = YCloudML(
+                    folder_id=self.folder_id,
+                    auth=service_account_key,
+                )
+            # Иначе используем API-ключ
+            elif self.api_key:
+                self._sdk = YCloudML(
+                    folder_id=self.folder_id,
+                    auth=self.api_key,
+                )
+            else:
+                self._error_message = "Не найден authorized_key.json и не указан YANDEX_API_KEY в config.py"
+                return False
+            
             self._model = self._sdk.models.completions(self.model_name)
             self._model = self._model.configure(
                 temperature=self.temperature,

@@ -1,8 +1,7 @@
 """
 AI Helper Configuration
 
-Заполни YANDEX_FOLDER_ID и YANDEX_API_KEY перед использованием.
-Получить можно в консоли Yandex Cloud: https://console.yandex.cloud/
+Скопируй этот файл в config.py и заполни своими данными.
 """
 
 # =============================================================================
@@ -10,11 +9,11 @@ AI Helper Configuration
 # =============================================================================
 
 # Folder ID из Yandex Cloud Console
-YANDEX_FOLDER_ID = ""  # Например: "b1g..."
+YANDEX_FOLDER_ID = "your-folder-id-here"
 
-# API-ключ для Foundation Models
+# API-ключ для Foundation Models (не используется в текущей версии)
 # Создать: IAM → Сервисные аккаунты → API-ключи
-YANDEX_API_KEY = ""  # Например: "AQVN..."
+YANDEX_API_KEY = "your-api-key-here"
 
 # =============================================================================
 # MODEL SETTINGS

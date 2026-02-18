@@ -41,8 +41,10 @@ env/
 *.log
 
 # Local config (contains API keys)
-# Uncomment if you don't want to track config.py:
-# config.py
+config.py
+
+# Yandex Cloud authorized keys (CRITICAL - contains private keys!)
+authorized_key.json
 
 # Screenshots
 screenshots/
