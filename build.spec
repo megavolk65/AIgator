@@ -17,6 +17,8 @@ a = Analysis(
     datas=[
         ('assets', 'assets'),
         ('config.py', '.'),
+        ('version.py', '.'),
+        ('settings.default.json', '.'),
     ],
     hiddenimports=[
         'PyQt6.QtWidgets',

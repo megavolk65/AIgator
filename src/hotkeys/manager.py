@@ -1,12 +1,15 @@
 """
 Менеджер горячих клавиш
+
+Использует библиотеку keyboard для глобального перехвата клавиш,
+в том числе в полноэкранных играх.
 """
 
 import sys
 import os
 import json
-from typing import Callable, Optional
-from pynput import keyboard
+from typing import Optional
+import keyboard
 from PyQt6.QtCore import QObject, pyqtSignal
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
@@ -23,19 +26,14 @@ class HotkeyManager(QObject):
     def __init__(self):
         super().__init__()
         self._enabled = True
-        self._listener = None
-        self._current_keys = set()
+        self._hotkey_ids = []  # ID зарегистрированных hotkey
         
         # Загружаем горячие клавиши из настроек
         hotkey_overlay_str, hotkey_screenshot_str = self._load_hotkeys_from_settings()
         
         # Сохраняем строковые значения
-        self.hotkey_overlay = hotkey_overlay_str
-        self.hotkey_screenshot = hotkey_screenshot_str
-        
-        # Комбинации клавиш
-        self._hotkey_toggle = self._parse_hotkey(hotkey_overlay_str)
-        self._hotkey_screenshot = self._parse_hotkey(hotkey_screenshot_str)
+        self.hotkey_overlay = self._normalize_hotkey(hotkey_overlay_str)
+        self.hotkey_screenshot = self._normalize_hotkey(hotkey_screenshot_str)
     
     def _load_hotkeys_from_settings(self):
         """Загрузить горячие клавиши из settings.json"""
@@ -53,52 +51,49 @@ class HotkeyManager(QObject):
         except:
             return ('Insert', 'Home')
     
-    def _parse_hotkey(self, hotkey_str: str) -> set:
-        """Преобразовать строку горячей клавиши в набор клавиш"""
+    def _normalize_hotkey(self, hotkey_str: str) -> str:
+        """Нормализовать строку горячей клавиши для библиотеки keyboard"""
+        # Маппинг названий клавиш
         key_map = {
-            'insert': keyboard.Key.insert,
-            'ins': keyboard.Key.insert,
-            'home': keyboard.Key.home,
-            'end': keyboard.Key.end,
-            'delete': keyboard.Key.delete,
-            'del': keyboard.Key.delete,
-            'pageup': keyboard.Key.page_up,
-            'page_up': keyboard.Key.page_up,
-            'pagedown': keyboard.Key.page_down,
-            'page_down': keyboard.Key.page_down,
-            'f1': keyboard.Key.f1,
-            'f2': keyboard.Key.f2,
-            'f3': keyboard.Key.f3,
-            'f4': keyboard.Key.f4,
-            'f5': keyboard.Key.f5,
-            'f6': keyboard.Key.f6,
-            'f7': keyboard.Key.f7,
-            'f8': keyboard.Key.f8,
-            'f9': keyboard.Key.f9,
-            'f10': keyboard.Key.f10,
-            'f11': keyboard.Key.f11,
-            'f12': keyboard.Key.f12,
-            'pause': keyboard.Key.pause,
-            'scroll_lock': keyboard.Key.scroll_lock,
-            'print_screen': keyboard.Key.print_screen,
+            'ins': 'insert',
+            'del': 'delete',
+            'pageup': 'page up',
+            'page_up': 'page up',
+            'pgup': 'page up',
+            'pagedown': 'page down',
+            'page_down': 'page down',
+            'pgdn': 'page down',
+            'scroll_lock': 'scroll lock',
+            'print_screen': 'print screen',
+            'printscreen': 'print screen',
+            'prtsc': 'print screen',
         }
         
         key_lower = hotkey_str.lower().strip()
-        if key_lower in key_map:
-            return {key_map[key_lower]}
-        
-        # По умолчанию Insert
-        return {keyboard.Key.insert}
+        return key_map.get(key_lower, key_lower)
     
     def register_hotkeys(self):
         """Зарегистрировать все горячие клавиши"""
         try:
-            # Создаём глобальный слушатель клавиатуры
-            self._listener = keyboard.Listener(
-                on_press=self._on_press,
-                on_release=self._on_release
+            # Сначала отменяем старые
+            self.unregister_hotkeys()
+            
+            # Регистрируем горячую клавишу для оверлея
+            keyboard.add_hotkey(
+                self.hotkey_overlay,
+                self._on_toggle_overlay,
+                suppress=True  # Подавляем передачу клавиши другим приложениям
             )
-            self._listener.start()
+            self._hotkey_ids.append(self.hotkey_overlay)
+            
+            # Регистрируем горячую клавишу для скриншота
+            keyboard.add_hotkey(
+                self.hotkey_screenshot,
+                self._on_take_screenshot,
+                suppress=True
+            )
+            self._hotkey_ids.append(self.hotkey_screenshot)
+            
             return True
             
         except Exception as e:
@@ -107,48 +102,32 @@ class HotkeyManager(QObject):
     
     def unregister_hotkeys(self):
         """Отменить регистрацию всех горячих клавиш"""
-        if self._listener:
-            self._listener.stop()
-            self._listener = None
+        for hotkey in self._hotkey_ids:
+            try:
+                keyboard.remove_hotkey(hotkey)
+            except:
+                pass
+        self._hotkey_ids.clear()
     
-    def _on_press(self, key):
-        """Обработчик нажатия клавиши"""
-        # Нормализуем клавишу
-        if hasattr(key, 'char') and key.char:
-            normalized_key = keyboard.KeyCode.from_char(key.char.lower())
-        else:
-            normalized_key = key
-        
-        self._current_keys.add(normalized_key)
-        
-        # Проверяем комбинации
+    def _on_toggle_overlay(self):
+        """Обработчик горячей клавиши оверлея"""
         if self._enabled:
-            if self._current_keys >= self._hotkey_toggle:
-                self.toggle_overlay.emit()
-                self._current_keys.clear()  # Сбрасываем чтобы не срабатывало повторно
-            elif self._current_keys >= self._hotkey_screenshot:
-                self.take_screenshot.emit()
-                self._current_keys.clear()
+            self.toggle_overlay.emit()
     
-    def _on_release(self, key):
-        """Обработчик отпускания клавиши"""
-        # Нормализуем клавишу
-        if hasattr(key, 'char') and key.char:
-            normalized_key = keyboard.KeyCode.from_char(key.char.lower())
-        else:
-            normalized_key = key
-        
-        # Удаляем из нажатых
-        self._current_keys.discard(normalized_key)
+    def _on_take_screenshot(self):
+        """Обработчик горячей клавиши скриншота"""
+        if self._enabled:
+            self.take_screenshot.emit()
     
     def update_hotkeys(self, hotkey_overlay: str = None, hotkey_screenshot: str = None):
         """Обновить горячие клавиши без перезапуска"""
         if hotkey_overlay:
-            self.hotkey_overlay = hotkey_overlay
-            self._hotkey_toggle = self._parse_hotkey(hotkey_overlay)
+            self.hotkey_overlay = self._normalize_hotkey(hotkey_overlay)
         if hotkey_screenshot:
-            self.hotkey_screenshot = hotkey_screenshot
-            self._hotkey_screenshot = self._parse_hotkey(hotkey_screenshot)
+            self.hotkey_screenshot = self._normalize_hotkey(hotkey_screenshot)
+        
+        # Перерегистрируем
+        self.register_hotkeys()
     
     def set_enabled(self, enabled: bool):
         """Включить/выключить обработку горячих клавиш"""
@@ -162,6 +141,6 @@ class HotkeyManager(QObject):
     def get_hotkey_description(self) -> dict:
         """Получить описание горячих клавиш"""
         return {
-            "toggle_overlay": config.HOTKEY_TOGGLE_OVERLAY,
-            "screenshot": config.HOTKEY_SCREENSHOT,
+            "toggle_overlay": self.hotkey_overlay,
+            "screenshot": self.hotkey_screenshot,
         }

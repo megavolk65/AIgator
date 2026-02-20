@@ -1,141 +1,79 @@
 # AI Helper
 
-Универсальный AI-ассистент с оверлеем на базе YandexGPT. Вызывается в любом приложении горячей клавишей. Основной фокус — помощь в играх, но может отвечать на любые вопросы.
+<p align="center">
+  <img src="assets/logo.png" alt="AI Helper" width="200">
+</p>
 
-![Python](https://img.shields.io/badge/Python-3.11+-blue)
-![License](https://img.shields.io/badge/License-MIT-green)
+<p align="center">
+  <strong>Универсальный AI-ассистент с оверлеем</strong><br>
+  Вызывается в любом приложении горячей клавишей
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/Python-3.11+-blue" alt="Python">
+  <img src="https://img.shields.io/badge/License-MIT-green" alt="License">
+  <img src="https://img.shields.io/badge/Platform-Windows-lightgrey" alt="Platform">
+</p>
 
 ## Возможности
 
 - 🎮 **Универсальный помощник** — работает в любом приложении (игры, браузер, IDE)
 - ⌨️ **Горячие клавиши** — быстрый вызов из любой точки системы
-- 📷 **Анализ скриншотов** — распознавание текста с экрана через Yandex Vision
-- 🖼️ **Отображение картинок** — карты локаций, скриншоты, гайды прямо в чате
-- 🎯 **Авто-определение контекста** — понимает какая игра/приложение активно
+- 📷 **Анализ скриншотов** — AI видит что на экране (Vision модели)
 - 🔒 **Безопасность** — не конфликтует с античитами
+- 🌍 **Два языка** — русский и английский интерфейс
 
-## Установка
+## Быстрый старт
 
-### Требования
+1. Скачайте и запустите приложение
+2. Откройте настройки (⚙️) и выберите API провайдер
+3. Введите API ключ
+4. Добавьте модели
+5. Готово!
 
-- Windows 10/11
-- Python 3.11+
-- Аккаунт [Yandex Cloud](https://console.yandex.cloud/)
+## API провайдеры
 
-### Быстрый старт
+### OpenRouter (международный)
 
-1. **Клонируйте репозиторий:**
-   ```bash
-   git clone https://github.com/megavolk65/ai-helper.git
-   cd ai-helper
-   ```
+- 🌐 **Сайт:** [openrouter.ai](https://openrouter.ai)
+- 🔑 **Получить ключ:** [openrouter.ai/keys](https://openrouter.ai/keys)
+- 💳 **Оплата:** международные карты
+- ✅ **Бесплатные модели:** Да! Модели с суффиксом `:free` работают без оплаты
 
-2. **Создайте виртуальное окружение:**
-   ```bash
-   python -m venv venv
-   venv\Scripts\activate
-   ```
+**Бесплатные модели с Vision:**
+- `qwen/qwen3-vl-30b-a3b-instruct:free`
+- `nvidia/nemotron-nano-12b-v2-vl:free`
 
-3. **Установите зависимости:**
-   ```bash
-   pip install -r requirements.txt
-   ```
+### AITunnel (для России)
 
-4. **Настройте конфигурацию:**
-   ```bash
-   # Скопируйте примеры конфигурации
-   copy config.example.py config.py
-   copy authorized_key.example.json authorized_key.json
-   ```
-   
-   Отредактируйте `config.py` и укажите свой `YANDEX_FOLDER_ID`
+- 🌐 **Сайт:** [aitunnel.ru](https://aitunnel.ru)
+- 🔑 **Получить ключ:** в личном кабинете после регистрации
+- 💳 **Оплата:** российские карты, рубли
+- ⚠️ **Бесплатных моделей нет**
 
-5. **Запустите:**
-   ```bash
-   python main.py
-   ```
-
-## ⚠️ Безопасность конфигурации
-
-**ВАЖНО!** Файлы `config.py` и `authorized_key.json` содержат секретную информацию и **НЕ ДОЛЖНЫ** попадать в публичный репозиторий!
-
-- ✅ Эти файлы уже добавлены в `.gitignore`
-- ✅ Используйте файлы `*.example.*` как шаблоны
-- ❌ **НИКОГДА** не коммитьте реальные ключи в git
-- ❌ Не делитесь `authorized_key.json` — он содержит приватный ключ RSA!
-
-## Получение доступа к Yandex Cloud
-
-1. Перейдите в [Yandex Cloud Console](https://console.yandex.cloud/)
-2. **Привяжите платёжный аккаунт** для активации облака (даётся грант 4000₽)
-3. Создайте каталог (или используйте существующий)
-4. Скопируйте **Folder ID** из свойств каталога и вставьте в `config.py`
-5. Перейдите в **IAM → Сервисные аккаунты**
-6. Создайте сервисный аккаунт и назначьте ему роли на уровне **каталога**:
-   - `ai.languageModels.user` — для работы с YandexGPT
-   - `ai.vision.user` — для анализа скриншотов
-   - `viewer` — для доступа к метаданным каталога
-7. Создайте **Авторизованный ключ** (Authorized Key) для сервисного аккаунта:
-   - Выберите алгоритм **RSA-2048**
-   - Скачайте JSON-файл с ключом
-   - Сохраните его как `authorized_key.json` в корне проекта
+**Дешёвые модели с Vision:**
+- `gemini-2.5-flash-lite-preview`
+- `gpt-5-nano`
 
 ## Горячие клавиши
 
-| Комбинация | Действие |
-|------------|----------|
-| `Ctrl+Shift+G` | Открыть/скрыть оверлей |
-| `Ctrl+Shift+S` | Сделать скриншот |
-| `Escape` | Закрыть оверлей |
+Настраиваются в настройках. По умолчанию:
+
+- `Insert` — Открыть/скрыть оверлей
+- `Home` — Сделать скриншот
+- `Escape` — Закрыть оверлей
 
 ## Использование
 
-1. Нажмите `Ctrl+Shift+G` чтобы вызвать оверлей
+1. Нажмите горячую клавишу чтобы вызвать оверлей
 2. Введите вопрос и нажмите Enter
 3. Получите ответ от AI
 
 ### Со скриншотом
 
-1. Нажмите `Ctrl+Shift+S` чтобы сделать скриншот
-2. Оверлей автоматически откроется с прикреплённым скриншотом
-3. Введите вопрос — AI увидит контекст с экрана
-
-## Сборка
-
-### Создание EXE
-
-```bash
-pip install pyinstaller
-pyinstaller build.spec
-```
-
-Готовый `AI Helper.exe` будет в папке `dist/`
-
-### Создание инсталятора
-
-1. Установите [Inno Setup](https://jrsoftware.org/isinfo.php)
-2. Откройте `installer/setup.iss`
-3. Скомпилируйте (Ctrl+F9)
-
-Инсталятор будет в `dist/installer/`
-
-## Структура проекта
-
-```
-ai-helper/
-├── main.py                 # Точка входа
-├── config.py               # Конфигурация
-├── requirements.txt        # Зависимости
-├── build.spec              # PyInstaller конфиг
-├── src/
-│   ├── overlay/            # UI оверлея
-│   ├── hotkeys/            # Горячие клавиши
-│   ├── game_detect/        # Определение игры/приложения
-│   ├── screenshot/         # Захват экрана
-│   └── ai/                 # Интеграция с YandexGPT/Vision
-├── installer/              # Inno Setup скрипты
-└── assets/                 # Иконки и ресурсы
-```
+1. Нажмите клавишу скриншота или кнопку 📷 в оверлее
+2. Скриншот прикрепится к сообщению
+3. Введите вопрос — AI увидит что на экране
 
 ## Безопасность для античитов
 
@@ -147,25 +85,29 @@ ai-helper/
 - ✅ Не использует хуки DirectX/Vulkan
 - ✅ Скриншоты через стандартный Windows API
 
-## Настройка
+## Установка
 
-Все настройки находятся в `config.py`:
+### Готовый установщик
 
-```python
-# Горячие клавиши
-HOTKEY_TOGGLE_OVERLAY = "ctrl+shift+g"
-HOTKEY_SCREENSHOT = "ctrl+shift+s"
+Скачайте `AI_Helper_Setup_x.x.x.exe` из [Releases](https://github.com/megavolk65/ai-helper/releases)
 
-# Размер окна
-OVERLAY_WIDTH = 500
-OVERLAY_HEIGHT = 600
+### Сборка из исходников
 
-# Модель
-YANDEX_MODEL = "yandexgpt-lite"  # или "yandexgpt"
-TEMPERATURE = 0.6
+```bash
+git clone https://github.com/megavolk65/ai-helper.git
+cd ai-helper
+python -m venv venv
+venv\Scripts\activate
+pip install -r requirements.txt
+python main.py
+```
 
-# Автозапуск
-START_MINIMIZED = True
+### Создание EXE и установщика
+
+```bash
+pip install pyinstaller
+pyinstaller build.spec
+# Затем скомпилировать installer/setup.iss через Inno Setup
 ```
 
 ## Лицензия
@@ -174,4 +116,4 @@ MIT License
 
 ## Автор
 
-MEGAVOLK — [@megavolk65](https://github.com/megavolk65)
+megavolk65 — [GitHub](https://github.com/megavolk65) • [Telegram](https://t.me/megavolk)

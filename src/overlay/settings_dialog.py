@@ -6,7 +6,7 @@ from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, 
     QLineEdit, QPushButton, QGroupBox, QFormLayout,
     QKeySequenceEdit, QMessageBox, QScrollArea,
-    QInputDialog, QCheckBox, QWidget, QFrame
+    QInputDialog, QCheckBox, QWidget, QFrame, QComboBox
 )
 from PyQt6.QtCore import Qt, pyqtSignal, QUrl
 from PyQt6.QtGui import QKeySequence, QDesktopServices
@@ -38,9 +38,24 @@ class SettingsDialog(QDialog):
         layout.setSpacing(10)
         layout.setContentsMargins(20, 20, 20, 20)
         
-        # === API ключ ===
-        api_group = QGroupBox("OpenRouter API")
-        api_layout = QHBoxLayout(api_group)
+        # === API провайдер ===
+        api_group = QGroupBox("API")
+        api_layout = QVBoxLayout(api_group)
+        
+        # Выбор провайдера
+        provider_layout = QHBoxLayout()
+        provider_layout.addWidget(QLabel(t("api_provider") + ":"))
+        
+        self.provider_combo = QComboBox()
+        self.provider_combo.addItem(t("provider_openrouter"), "openrouter")
+        self.provider_combo.addItem(t("provider_aitunnel"), "aitunnel")
+        self.provider_combo.currentIndexChanged.connect(self._on_provider_changed)
+        provider_layout.addWidget(self.provider_combo, 1)
+        
+        api_layout.addLayout(provider_layout)
+        
+        # API ключ
+        key_layout = QHBoxLayout()
         
         self.api_key_input = QLineEdit()
         self.api_key_input.setPlaceholderText("sk-or-v1-...")
@@ -53,9 +68,11 @@ class SettingsDialog(QDialog):
         self.show_key_btn.setStyleSheet("font-size: 18px; padding: 0px;")
         self.show_key_btn.toggled.connect(self._toggle_key_visibility)
         
-        api_layout.addWidget(QLabel(t("api_key")))
-        api_layout.addWidget(self.api_key_input, 1)
-        api_layout.addWidget(self.show_key_btn)
+        key_layout.addWidget(QLabel(t("api_key")))
+        key_layout.addWidget(self.api_key_input, 1)
+        key_layout.addWidget(self.show_key_btn)
+        
+        api_layout.addLayout(key_layout)
         
         layout.addWidget(api_group)
         
@@ -65,7 +82,7 @@ class SettingsDialog(QDialog):
         
         # Ссылка на OpenRouter + кнопка добавить
         header_layout = QHBoxLayout()
-        link_label = QLabel(f'<a href="https://openrouter.ai/models" style="color: #4fc3f7;">{t("models_catalog")}</a>')
+        link_label = QLabel(f'<a href="https://openrouter.ai/models?fmt=cards&input_modalities=text%2Cimage&modality=text%2Bimage-%3Etext" style="color: #4fc3f7;">{t("models_catalog")}</a>')
         link_label.setOpenExternalLinks(True)
         header_layout.addWidget(link_label)
         header_layout.addStretch()
@@ -196,8 +213,22 @@ class SettingsDialog(QDialog):
             self.api_key_input.setEchoMode(QLineEdit.EchoMode.Password)
             self.show_key_btn.setText("👁")
     
+    def _on_provider_changed(self, index):
+        """Обработчик смены провайдера"""
+        provider = self.provider_combo.currentData()
+        if provider == "openrouter":
+            self.api_key_input.setPlaceholderText("sk-or-v1-...")
+        else:
+            self.api_key_input.setPlaceholderText("sk-aitunnel-...")
+    
     def _load_current_settings(self):
         """Загрузить текущие настройки в поля"""
+        # API провайдер
+        provider = self.current_settings.get("api_provider", "openrouter")
+        index = self.provider_combo.findData(provider)
+        if index >= 0:
+            self.provider_combo.setCurrentIndex(index)
+        
         # API ключ
         api_key = self.current_settings.get("api_key", "")
         self.api_key_input.setText(api_key)
@@ -265,6 +296,18 @@ class SettingsDialog(QDialog):
         count = self.models_layout_inner.count()
         self.models_layout_inner.insertWidget(count - 1, row_widget)
     
+    def _model_id_to_display_name(self, model_id: str) -> str:
+        """Сгенерировать display_name из model_id"""
+        # google/gemini-2.0-flash -> GOOGLE: Gemini 2.0 Flash
+        if "/" in model_id:
+            provider, model = model_id.split("/", 1)
+            # Убираем суффиксы вроде :free, :online
+            model = model.split(":")[0]
+            # Форматируем
+            model_name = model.replace("-", " ").title()
+            return f"{provider.upper()}: {model_name}"
+        return model_id.replace("-", " ").title()
+    
     def _add_model(self):
         """Добавить модель"""
         model_id, ok = QInputDialog.getText(
@@ -276,17 +319,7 @@ class SettingsDialog(QDialog):
             return
         
         model_id = model_id.strip()
-        
-        display_name, ok = QInputDialog.getText(
-            self,
-            t("add_model"),
-            t("display_name_prompt"),
-            text=model_id.upper().replace("/", ": ").replace("-", " ")
-        )
-        if not ok or not display_name.strip():
-            return
-        
-        display_name = display_name.strip()
+        display_name = self._model_id_to_display_name(model_id)
         self._add_model_item(model_id, display_name)
     
     def _remove_model_row(self, row_widget: QFrame):
@@ -296,15 +329,26 @@ class SettingsDialog(QDialog):
     
     def _save_settings(self):
         """Сохранить настройки"""
-        # Валидация API ключа
+        # Получаем провайдер и ключ
+        api_provider = self.provider_combo.currentData()
         api_key = self.api_key_input.text().strip()
-        if api_key and not api_key.startswith("sk-or-"):
-            QMessageBox.warning(
-                self, 
-                t("error").replace("❌ ", ""), 
-                t("api_key_error")
-            )
-            return
+        
+        # Мягкая валидация API ключа
+        if api_key:
+            if api_provider == "openrouter" and not api_key.startswith("sk-or-"):
+                QMessageBox.warning(
+                    self, 
+                    t("error").replace("❌ ", ""), 
+                    "OpenRouter API key should start with 'sk-or-'"
+                )
+                return
+            elif api_provider == "aitunnel" and not api_key.startswith("sk-aitunnel-"):
+                QMessageBox.warning(
+                    self, 
+                    t("error").replace("❌ ", ""), 
+                    "AITunnel API key should start with 'sk-aitunnel-'"
+                )
+                return
         
         # Получаем модели
         models = []
@@ -332,6 +376,7 @@ class SettingsDialog(QDialog):
         # Формируем настройки
         new_settings = {
             **self.current_settings,
+            "api_provider": api_provider,
             "api_key": api_key,
             "models": models,
             "hotkey_overlay": hotkey_overlay,

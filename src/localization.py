@@ -132,8 +132,24 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
         "en": "Display name:"
     },
     "api_key_error": {
-        "ru": "API ключ OpenRouter должен начинаться с 'sk-or-'",
-        "en": "OpenRouter API key must start with 'sk-or-'"
+        "ru": "Некорректный API ключ",
+        "en": "Invalid API key"
+    },
+    "setup_required": {
+        "ru": "⚙️ Откройте настройки и укажите API ключ",
+        "en": "⚙️ Open settings and enter your API key"
+    },
+    "api_provider": {
+        "ru": "API провайдер",
+        "en": "API Provider"
+    },
+    "provider_openrouter": {
+        "ru": "OpenRouter (международный)",
+        "en": "OpenRouter (international)"
+    },
+    "provider_aitunnel": {
+        "ru": "AITunnel (оплата в рублях)",
+        "en": "AITunnel (payment in rubles)"
     },
     
     # === Трей ===
@@ -174,6 +190,12 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
     "open_in_browser": {
         "ru": "Открыть в браузере",
         "en": "Open in browser"
+    },
+    
+    # === Обратная связь ===
+    "send_feedback": {
+        "ru": "Отправить отзыв",
+        "en": "Send feedback"
     },
 }
 

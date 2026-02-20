@@ -7,9 +7,7 @@ keyboard>=0.13.5
 # Windows API
 pywin32>=306
 
-# AI
-google-genai>=1.60.0
-yandex-ai-studio-sdk>=0.19.0
+# AI (OpenRouter)
 PyJWT>=2.8.0
 cryptography>=41.0.0
 
@@ -22,6 +20,9 @@ Pillow>=10.0.0
 
 # HTTP requests (for image loading)
 requests>=2.31.0
+
+# Version comparison
+packaging>=23.0
 
 # Build
 pyinstaller>=6.0.0

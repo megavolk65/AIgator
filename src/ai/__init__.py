@@ -1,4 +1,4 @@
-"""AI integrations"""
-from .gemini_client import GeminiClient as YandexAssistantClient  # Используем Gemini
+"""AI integrations - OpenRouter client"""
+from .openrouter_client import OpenRouterClient
 
-__all__ = ["YandexAssistantClient"]
+__all__ = ["OpenRouterClient"]

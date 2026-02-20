@@ -10,11 +10,11 @@ from typing import Optional
 from PyQt6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QTextBrowser, QLineEdit, QPushButton, QLabel,
-    QApplication, QSizeGrip, QComboBox
+    QApplication, QSizeGrip, QComboBox, QStyledItemDelegate, QStyle, QStyleOptionComboBox, QStylePainter
 )
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, QUrl, QByteArray, QTimer
 import json
-from PyQt6.QtGui import QFont, QTextCursor, QDesktopServices, QPixmap
+from PyQt6.QtGui import QFont, QTextCursor, QDesktopServices, QPixmap, QColor, QIcon
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
@@ -24,6 +24,130 @@ from .web_dialog import WebDialog
 import config
 
 from src.localization import Localization, t
+from src.updater import check_for_updates, get_current_version, get_releases_url
+from version import GITHUB_REPO
+
+
+class ModelItemDelegate(QStyledItemDelegate):
+    """Делегат для отображения моделей с приглушённым названием компании"""
+    
+    def paint(self, painter, option, index):
+        text = index.data(Qt.ItemDataRole.DisplayRole)
+        if not text:
+            super().paint(painter, option, index)
+            return
+        
+        # Фон при выделении/наведении
+        if option.state & QStyle.StateFlag.State_Selected:
+            painter.fillRect(option.rect, option.palette.highlight())
+        elif option.state & QStyle.StateFlag.State_MouseOver:
+            painter.fillRect(option.rect, QColor("#3a3a5a"))
+        
+        # Парсим: "COMPANY: MODEL — PRICE"
+        if ": " in text:
+            company, model = text.split(": ", 1)
+            company += ": "
+        else:
+            company, model = "", text
+        
+        painter.save()
+        text_rect = option.rect.adjusted(5, 0, -5, 0)
+        
+        # Компания — приглушённо
+        if company:
+            painter.setPen(QColor("#888888"))
+            painter.drawText(text_rect, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, company)
+            company_width = painter.fontMetrics().horizontalAdvance(company)
+            text_rect = text_rect.adjusted(company_width, 0, 0, 0)
+        
+        # Модель — ярко
+        painter.setPen(QColor("#ffffff"))
+        painter.drawText(text_rect, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, model)
+        
+        painter.restore()
+
+
+class StyledModelComboBox(QComboBox):
+    """Кастомный ComboBox с приглушённым названием компании"""
+    
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setItemDelegate(ModelItemDelegate(self))
+    
+    def paintEvent(self, event):
+        painter = QStylePainter(self)
+        
+        # Рисуем рамку ComboBox
+        opt = QStyleOptionComboBox()
+        self.initStyleOption(opt)
+        painter.drawComplexControl(QStyle.ComplexControl.CC_ComboBox, opt)
+        
+        # Получаем текущий текст
+        text = self.currentText()
+        if not text:
+            return
+        
+        # Парсим: "COMPANY: MODEL — PRICE"
+        if ": " in text:
+            company, model = text.split(": ", 1)
+            company += ": "
+        else:
+            company, model = "", text
+        
+        # Область для текста
+        text_rect = self.style().subControlRect(
+            QStyle.ComplexControl.CC_ComboBox, opt,
+            QStyle.SubControl.SC_ComboBoxEditField, self
+        )
+        text_rect = text_rect.adjusted(2, 0, 0, 0)
+        
+        # Компания — приглушённо
+        if company:
+            painter.setPen(QColor("#888888"))
+            painter.drawText(text_rect, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, company)
+            company_width = painter.fontMetrics().horizontalAdvance(company)
+            text_rect = text_rect.adjusted(company_width, 0, 0, 0)
+        
+        # Модель — ярко
+        painter.setPen(QColor("#ffffff"))
+        painter.drawText(text_rect, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, model)
+
+
+class UpdateCheckerWorker(QThread):
+    """Фоновый поток для проверки обновлений"""
+    update_available = pyqtSignal(str, str)  # (new_version, release_url)
+    no_update = pyqtSignal()
+    
+    def run(self):
+        try:
+            result = check_for_updates()
+            if result:
+                self.update_available.emit(result[0], result[1])
+            else:
+                self.no_update.emit()
+        except:
+            self.no_update.emit()
+
+
+class BalanceWorker(QThread):
+    """Фоновый поток для получения баланса"""
+    balance_ready = pyqtSignal(dict)  # {balance, currency, provider}
+    
+    def __init__(self, gpt_client):
+        super().__init__()
+        self.gpt_client = gpt_client
+    
+    def run(self):
+        try:
+            result = self.gpt_client.get_balance()
+            provider = self.gpt_client.get_provider_name()
+            if result:
+                result["provider"] = provider
+                self.balance_ready.emit(result)
+            else:
+                self.balance_ready.emit({"provider": provider, "balance": None, "currency": ""})
+        except:
+            pass
 
 
 class AIWorker(QThread):
@@ -75,8 +199,14 @@ class OverlayWindow(QMainWindow):
         self._current_screenshot_context = ""
         self._current_screenshot_image: Optional[QPixmap] = None
         self._current_screenshot_bytes: Optional[bytes] = None  # Байты изображения
+        self._current_app_context = ""  # Название активного окна/игры
         self._worker: Optional[AIWorker] = None
+        self._balance_worker: Optional[BalanceWorker] = None
+        self._update_worker: Optional[UpdateCheckerWorker] = None
+        self._new_version: Optional[str] = None  # Новая версия если есть
+        self._new_version_url: Optional[str] = None
         self._chat_history_html = ""
+        self._showing_setup_instruction = False  # Флаг: показана ли инструкция
         self.autostart_checker = None  # Функция для проверки состояния автозапуска
         
         # Загружаем язык из настроек
@@ -86,6 +216,8 @@ class OverlayWindow(QMainWindow):
         self._setup_ui()
         self._apply_styles()
         self._update_context()  # Устанавливаем контекст один раз при старте
+        self._update_balance()  # Загружаем баланс при старте
+        self._check_for_updates()  # Проверяем обновления при старте
         
         # Подписываемся на смену языка
         Localization.add_listener(self._update_ui_texts)
@@ -93,6 +225,11 @@ class OverlayWindow(QMainWindow):
     def _setup_window(self):
         """Настройка окна"""
         self.setWindowTitle(t("app_name"))
+        
+        # Иконка окна (для панели задач)
+        icon_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "assets", "icon.ico")
+        if os.path.exists(icon_path):
+            self.setWindowIcon(QIcon(icon_path))
         
         # Флаги окна для работы поверх полноэкранных игр
         self.setWindowFlags(
@@ -241,9 +378,19 @@ class OverlayWindow(QMainWindow):
         header_layout.addWidget(self.lang_btn)
         
         # Название
-        self.title_label = QLabel(t("app_name"))
+        self.title_label = QLabel("")
         self.title_label.setObjectName("titleLabel")
         header_layout.addWidget(self.title_label)
+        self.title_label.setText(t("app_name"))
+        
+        # Версия (мелким серым шрифтом, кликабельная)
+        self.version_label = QLabel("")
+        self.version_label.setStyleSheet("color: #6c757d; font-size: 11px;")
+        self.version_label.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.version_label.setToolTip(f"GitHub: {GITHUB_REPO}")
+        self.version_label.mousePressEvent = self._on_version_click
+        header_layout.addWidget(self.version_label)
+        self.version_label.setText(f"v{get_current_version()}")
         
         header_layout.addStretch()
         
@@ -269,13 +416,32 @@ class OverlayWindow(QMainWindow):
         
         main_layout.addLayout(header_layout)
         
-        # === Область чата ===
-        self.chat_display = QTextBrowser()
+        # === Область чата с кнопкой очистки поверх ===
+        chat_container = QWidget()
+        chat_container_layout = QVBoxLayout(chat_container)
+        chat_container_layout.setContentsMargins(0, 0, 0, 0)
+        chat_container_layout.setSpacing(0)
+        
+        # Создаём внутренний контейнер для наложения
+        chat_inner = QWidget()
+        chat_container_layout.addWidget(chat_inner, 1)
+        
+        self.chat_display = QTextBrowser(chat_inner)
         self.chat_display.setOpenExternalLinks(False)
         self.chat_display.setOpenLinks(False)  # Предотвращаем сброс содержимого при клике
         self.chat_display.anchorClicked.connect(self._handle_link_click)
         self.chat_display.setPlaceholderText(t("ask_question"))
-        main_layout.addWidget(self.chat_display, 1)
+        
+        # Кнопка очистки поверх чата (правый нижний угол)
+        self.clear_btn = QPushButton(t("clear_chat"), chat_inner)
+        self.clear_btn.setObjectName("clearButton")
+        self.clear_btn.clicked.connect(self._clear_chat)
+        self.clear_btn.raise_()  # Поверх чата
+        
+        # Сохраняем ссылку на внутренний контейнер для resizeEvent
+        self._chat_inner = chat_inner
+        
+        main_layout.addWidget(chat_container, 1)
         
         # === Превью скриншота ===
         self.screenshot_preview_container = QWidget()
@@ -342,11 +508,12 @@ class OverlayWindow(QMainWindow):
         # === Нижняя панель ===
         footer_layout = QHBoxLayout()
         
-        # Кнопка очистки
-        self.clear_btn = QPushButton(t("clear_chat"))
-        self.clear_btn.setObjectName("clearButton")
-        self.clear_btn.clicked.connect(self._clear_chat)
-        footer_layout.addWidget(self.clear_btn)
+        # Кнопка "Отправить отзыв" (ссылка на ТГ)
+        self.feedback_btn = QPushButton(t("send_feedback"))
+        self.feedback_btn.setObjectName("feedbackButton")
+        self.feedback_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.feedback_btn.clicked.connect(self._on_feedback_click)
+        footer_layout.addWidget(self.feedback_btn)
         
         footer_layout.addStretch()
         
@@ -355,7 +522,7 @@ class OverlayWindow(QMainWindow):
         self.model_label.setStyleSheet("color: #6c757d; font-size: 12px;")
         footer_layout.addWidget(self.model_label)
         
-        self.model_combo = QComboBox()
+        self.model_combo = StyledModelComboBox()
         self.model_combo.setObjectName("modelCombo")
         self.model_combo.setMinimumWidth(200)
         self._populate_models()
@@ -370,14 +537,43 @@ class OverlayWindow(QMainWindow):
         self.settings_btn.clicked.connect(self._open_settings)
         footer_layout.addWidget(self.settings_btn)
         
+        # Провайдер и баланс (кликабельный, после шестерёнки)
+        self.provider_balance_label = QLabel("")
+        self.provider_balance_label.setStyleSheet("""
+            QLabel {
+                color: #6c757d;
+                font-size: 11px;
+            }
+            QLabel:hover {
+                color: #ff6b6b;
+            }
+        """)
+        self.provider_balance_label.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.provider_balance_label.mousePressEvent = self._on_balance_click
+        footer_layout.addWidget(self.provider_balance_label)
+        
         # Индикатор скриншота
         self.screenshot_indicator = QLabel("")
         self.screenshot_indicator.setStyleSheet("color: #4fc3f7; font-size: 12px;")
         footer_layout.addWidget(self.screenshot_indicator)
         
-        # Грип для изменения размера
-        size_grip = QSizeGrip(self)
-        footer_layout.addWidget(size_grip)
+        # Грип для изменения размера (30x30 как шестеренка)
+        grip_container = QWidget()
+        grip_container.setFixedSize(30, 30)
+        grip_container.setToolTip("Изменить размер")
+        grip_container.setCursor(Qt.CursorShape.SizeFDiagCursor)
+        
+        # Визуальный индикатор
+        grip_label = QLabel("⤡", grip_container)
+        grip_label.setStyleSheet("color: #ffffff; font-size: 20px;")
+        grip_label.setGeometry(0, 0, 30, 30)
+        grip_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        # Функциональный грип поверх
+        size_grip = QSizeGrip(grip_container)
+        size_grip.setGeometry(0, 0, 30, 30)
+        
+        footer_layout.addWidget(grip_container)
         
         main_layout.addLayout(footer_layout)
     
@@ -386,6 +582,70 @@ class OverlayWindow(QMainWindow):
         self.setStyleSheet(DARK_THEME)
         
         # Инициализация чата с CSS
+        self._update_chat_display()
+        
+        # Показываем инструкцию если нужно
+        self._update_setup_message()
+    
+    def _update_setup_message(self):
+        """Показать/скрыть инструкцию по настройке в области чата"""
+        settings = self._load_settings()
+        api_key = settings.get("api_key", "")
+        models = settings.get("models", [])
+        
+        # Если нет API ключа или нет моделей и (чат пуст или показана инструкция) — показываем инструкцию
+        if not api_key or not models:
+            if not self._chat_history_html or self._showing_setup_instruction:
+                self._show_setup_instruction()
+        
+        # Обновляем placeholder поля ввода
+        self.input_field.setPlaceholderText(t("enter_question"))
+    
+    def _show_setup_instruction(self):
+        """Показать инструкцию по настройке в области чата"""
+        lang = Localization.get_language()
+        
+        if lang == "ru":
+            # Для русского интерфейса - AITunnel (оплата в рублях)
+            html = '''
+            <div style="text-align: center; padding: 30px 20px;">
+                <div style="font-size: 48px; margin-bottom: 15px;">⚙️</div>
+                <div style="font-size: 20px; color: #ffffff; margin-bottom: 12px;">
+                    <strong>Добро пожаловать в AI Helper!</strong>
+                </div>
+                <div style="font-size: 15px; color: #aaaaaa; text-align: left; display: inline-block; line-height: 1.6;">
+                    <strong style="color: #4fc3f7;">Для начала работы:</strong><br>
+                    1. Зарегистрируйтесь на <a href="https://aitunnel.ru" style="color: #4fc3f7;">aitunnel.ru</a><br>
+                    2. Откройте настройки (⚙️) и введите API-ключ<br><br>
+                    <strong style="color: #ff9800;">Выбор провайдера:</strong><br>
+                    • <strong>AITunnel</strong> — оплата в рублях, бесплатных моделей нет<br>
+                    • <strong>OpenRouter</strong> — оплата в $, есть бесплатные модели<br><br>
+                    <span style="color: #888;">Добавьте модели с поддержкой Vision для работы со скриншотами</span>
+                </div>
+            </div>
+            '''
+        else:
+            # Для английского - OpenRouter
+            html = '''
+            <div style="text-align: center; padding: 30px 20px;">
+                <div style="font-size: 48px; margin-bottom: 15px;">⚙️</div>
+                <div style="font-size: 20px; color: #ffffff; margin-bottom: 12px;">
+                    <strong>Welcome to AI Helper!</strong>
+                </div>
+                <div style="font-size: 15px; color: #aaaaaa; text-align: left; display: inline-block; line-height: 1.6;">
+                    <strong style="color: #4fc3f7;">To get started:</strong><br>
+                    1. Sign up at <a href="https://openrouter.ai/keys" style="color: #4fc3f7;">openrouter.ai/keys</a><br>
+                    2. Open settings (⚙️) and enter your API key<br><br>
+                    <strong style="color: #ff9800;">Provider choice:</strong><br>
+                    • <strong>OpenRouter</strong> — pay in $, has FREE models<br>
+                    • <strong>AITunnel</strong> — pay in ₽, no free models<br><br>
+                    <span style="color: #888;">Add Vision models to work with screenshots</span>
+                </div>
+            </div>
+            '''
+        
+        self._chat_history_html = html
+        self._showing_setup_instruction = True
         self._update_chat_display()
     
     def _update_chat_display(self):
@@ -410,6 +670,11 @@ class OverlayWindow(QMainWindow):
     
     def _add_message(self, role: str, text: str):
         """Добавить сообщение в чат"""
+        # Если была показана инструкция — очищаем
+        if self._showing_setup_instruction:
+            self._chat_history_html = ""
+            self._showing_setup_instruction = False
+        
         # Конвертируем markdown в HTML
         html_text = self._markdown_to_html(text)
         
@@ -472,10 +737,14 @@ class OverlayWindow(QMainWindow):
         return text
     
     def _handle_link_click(self, url: QUrl):
-        """Обработка клика по ссылке - открыть во встроенном браузере"""
+        """Обработка клика по ссылке"""
         url_str = url.toString()
-        dialog = WebDialog(self, url_str)
-        dialog.exec()
+        # API провайдеры и GitHub открываем во внешнем браузере
+        if 'openrouter.ai' in url_str or 'aitunnel.ru' in url_str or 'github.com' in url_str:
+            QDesktopServices.openUrl(url)
+        else:
+            dialog = WebDialog(self, url_str)
+            dialog.exec()
     
     def _on_send_message(self):
         """Отправка сообщения"""
@@ -497,9 +766,14 @@ class OverlayWindow(QMainWindow):
         
         # Запускаем запрос в фоне
         if self.gpt_client:
+            # Добавляем контекст активного окна к сообщению
+            message_with_context = text
+            if self._current_app_context:
+                message_with_context = f"[Активное окно: {self._current_app_context}]\n{text}"
+            
             self._worker = AIWorker(
                 self.gpt_client,
-                text,
+                message_with_context,
                 self._current_screenshot_context,
                 self._current_screenshot_bytes  # Передаём байты изображения
             )
@@ -517,6 +791,8 @@ class OverlayWindow(QMainWindow):
         """Получен ответ от AI"""
         self._add_message("assistant", response)
         self._set_input_enabled(True)
+        # Обновляем баланс после ответа
+        self._update_balance()
     
     def _on_error(self, error: str):
         """Произошла ошибка"""
@@ -587,6 +863,7 @@ class OverlayWindow(QMainWindow):
         context = self.context_detector.get_active_window_context()
         if context:
             self.context_label.setText(f"{context.app_name}")
+            self._current_app_context = context.app_name
             
             # Обновляем системный промпт
             if self.gpt_client:
@@ -594,6 +871,7 @@ class OverlayWindow(QMainWindow):
                 self.gpt_client.update_context(game_name=game_name)
         else:
             self.context_label.setText(t("not_detected"))
+            self._current_app_context = ""
         
         # Показываем окно обратно
         if not self.isVisible():
@@ -604,7 +882,9 @@ class OverlayWindow(QMainWindow):
     def _clear_chat(self):
         """Очистить чат"""
         self._chat_history_html = ""
+        self._showing_setup_instruction = False
         self._update_chat_display()
+        self._update_setup_message()  # Показать инструкцию если нужно
         
         if self.gpt_client:
             self.gpt_client.clear_history()
@@ -615,13 +895,124 @@ class OverlayWindow(QMainWindow):
         if self.isVisible():
             self.hide()
         else:
+            # Сначала определяем контекст (пока оверлей скрыт)
+            if self.context_detector:
+                context = self.context_detector.get_active_window_context()
+                if context:
+                    self.context_label.setText(f"{context.app_name}")
+                    self._current_app_context = context.app_name
+                    if self.gpt_client:
+                        game_name = context.app_name if context.app_type == "game" else None
+                        self.gpt_client.update_context(game_name=game_name)
+                else:
+                    self.context_label.setText(t("not_detected"))
+                    self._current_app_context = ""
+            
+            # Обновляем баланс при показе
+            self._update_balance()
+            
+            # Показываем окно
             self.show()
-            
-            # Принудительно забираем фокус у игры
             self._force_focus_from_game()
-            
-            # Устанавливаем фокус на поле ввода
             self.input_field.setFocus()
+    
+    def _update_balance(self):
+        """Обновить баланс в фоне"""
+        if self.gpt_client:
+            self._balance_worker = BalanceWorker(self.gpt_client)
+            self._balance_worker.balance_ready.connect(self._on_balance_ready)
+            self._balance_worker.start()
+    
+    def _on_balance_ready(self, data: dict):
+        """Обработчик получения баланса"""
+        provider = data.get("provider", "")
+        balance = data.get("balance")
+        currency = data.get("currency", "")
+        
+        if balance is not None:
+            # Форматируем баланс
+            if balance >= 100:
+                balance_str = f"{balance:.0f}"
+            else:
+                balance_str = f"{balance:.2f}"
+            self.provider_balance_label.setText(f"{provider} • {balance_str}{currency}")
+        else:
+            self.provider_balance_label.setText(provider)
+    
+    def _on_balance_click(self, event):
+        """Клик по балансу - открыть страницу трат"""
+        settings = self._load_settings()
+        provider = settings.get("api_provider", "openrouter")
+        
+        if provider == "aitunnel":
+            url = "https://aitunnel.ru/panel/stats"
+        else:
+            url = "https://openrouter.ai/activity"
+        
+        QDesktopServices.openUrl(QUrl(url))
+    
+    def _on_feedback_click(self):
+        """Клик по кнопке отзыва - открыть Телеграм"""
+        QDesktopServices.openUrl(QUrl("https://t.me/megavolk"))
+    
+    def _on_version_click(self, event):
+        """Клик по версии - открыть GitHub репозиторий или страницу релизов"""
+        if self._new_version_url:
+            QDesktopServices.openUrl(QUrl(self._new_version_url))
+        else:
+            QDesktopServices.openUrl(QUrl(f"https://github.com/{GITHUB_REPO}"))
+    
+    def _check_for_updates(self):
+        """Проверить обновления в фоне"""
+        self._update_worker = UpdateCheckerWorker()
+        self._update_worker.update_available.connect(self._on_update_available)
+        self._update_worker.start()
+    
+    def _on_update_available(self, new_version: str, release_url: str):
+        """Обработчик: доступно обновление"""
+        self._new_version = new_version
+        self._new_version_url = release_url
+        
+        # Меняем цвет версии на красный
+        self.version_label.setText(f"v{get_current_version()} → v{new_version}")
+        self.version_label.setStyleSheet("""
+            QLabel {
+                color: #ff6b6b;
+                font-size: 10px;
+                font-weight: bold;
+            }
+            QLabel:hover {
+                color: #ff4444;
+            }
+        """)
+        self.version_label.setToolTip(f"Доступна новая версия! Нажмите для загрузки")
+        
+        # Показываем сообщение в чате
+        lang = Localization.get_language()
+        if lang == "ru":
+            message = f'''🆕 <strong>Доступна новая версия {new_version}!</strong><br>
+            <a href="{release_url}" style="color: #4fc3f7;">Скачать обновление</a>'''
+        else:
+            message = f'''🆕 <strong>New version {new_version} available!</strong><br>
+            <a href="{release_url}" style="color: #4fc3f7;">Download update</a>'''
+        
+        # Добавляем как системное сообщение
+        self._add_system_message(message)
+    
+    def _add_system_message(self, html: str):
+        """Добавить системное сообщение в чат"""
+        # Если была показана инструкция — не перезаписываем
+        if self._showing_setup_instruction:
+            return
+        
+        message_html = f'''
+        <div class="message system-message" style="background-color: #2d3a4a; border-left: 3px solid #4fc3f7;">
+            <div class="message-content" style="padding: 10px;">{html}</div>
+        </div>
+        '''
+        
+        self._chat_history_html += message_html
+        self._update_chat_display()
     
     def keyPressEvent(self, event):
         """Обработка нажатий клавиш"""
@@ -641,11 +1032,45 @@ class OverlayWindow(QMainWindow):
             self.move(event.globalPosition().toPoint() - self._drag_pos)
             event.accept()
     
+    def resizeEvent(self, event):
+        """Обработка изменения размера окна"""
+        super().resizeEvent(event)
+        self._position_chat_elements()
+    
+    def showEvent(self, event):
+        """При показе окна"""
+        super().showEvent(event)
+        # Отложенное позиционирование после layout
+        QTimer.singleShot(0, self._position_chat_elements)
+    
+    def _position_chat_elements(self):
+        """Позиционировать элементы поверх чата"""
+        if hasattr(self, '_chat_inner') and hasattr(self, 'chat_display') and hasattr(self, 'clear_btn'):
+            # Растягиваем chat_display на весь контейнер
+            self.chat_display.setGeometry(0, 0, self._chat_inner.width(), self._chat_inner.height())
+            
+            # Позиционируем кнопку очистки в правом нижнем углу
+            btn_width = self.clear_btn.sizeHint().width()
+            btn_height = self.clear_btn.sizeHint().height()
+            margin = 10
+            self.clear_btn.setGeometry(
+                self._chat_inner.width() - btn_width - margin,
+                self._chat_inner.height() - btn_height - margin,
+                btn_width,
+                btn_height
+            )
+            self.clear_btn.raise_()
+    
     # === Выбор модели ===
     
     def _get_settings_path(self):
         """Получить путь к файлу настроек"""
-        return os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "settings.json")
+        # Определяем базовый путь (для PyInstaller и dev-режима)
+        if getattr(sys, 'frozen', False):
+            base_path = os.path.dirname(sys.executable)
+        else:
+            base_path = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        return os.path.join(base_path, "settings.json")
     
     def _load_settings(self):
         """Загрузить настройки"""
@@ -664,13 +1089,17 @@ class OverlayWindow(QMainWindow):
             pass
     
     def _get_models_list(self):
-        """Получить список моделей (из settings или config)"""
+        """Получить список моделей (из settings или config в зависимости от провайдера)"""
         settings = self._load_settings()
         models = settings.get("models", [])
         
-        # Если в настройках пусто - используем дефолтные из config
+        # Если в настройках пусто - используем дефолтные в зависимости от провайдера
         if not models:
-            models = getattr(config, 'OPENROUTER_MODELS', [])
+            provider = settings.get("api_provider", "openrouter")
+            if provider == "aitunnel":
+                models = getattr(config, 'AITUNNEL_MODELS', [])
+            else:
+                models = getattr(config, 'OPENROUTER_MODELS', [])
         
         return models
     
@@ -738,9 +1167,13 @@ class OverlayWindow(QMainWindow):
         if "api_key" not in current_settings:
             current_settings["api_key"] = getattr(config, 'OPENROUTER_API_KEY', '')
         
-        # Добавляем текущие модели
-        if "models" not in current_settings:
-            current_settings["models"] = getattr(config, 'OPENROUTER_MODELS', [])
+        # Добавляем текущие модели (в зависимости от провайдера)
+        if "models" not in current_settings or not current_settings["models"]:
+            provider = current_settings.get("api_provider", "openrouter")
+            if provider == "aitunnel":
+                current_settings["models"] = getattr(config, 'AITUNNEL_MODELS', [])
+            else:
+                current_settings["models"] = getattr(config, 'OPENROUTER_MODELS', [])
         
         # Добавляем текущее состояние автозапуска
         if self.autostart_checker:
@@ -754,11 +1187,9 @@ class OverlayWindow(QMainWindow):
         """Обработчик сохранения настроек"""
         self._save_settings(new_settings)
         
-        # Обновляем API ключ в клиенте
-        if self.gpt_client and "api_key" in new_settings:
-            api_key = new_settings["api_key"]
-            if api_key:
-                self.gpt_client.api_key = api_key
+        # Перезагружаем настройки клиента (провайдер, ключ, base_url)
+        if self.gpt_client:
+            self.gpt_client.reload_settings()
         
         # Обновляем список моделей
         if "models" in new_settings:
@@ -772,6 +1203,19 @@ class OverlayWindow(QMainWindow):
         # Обновляем автозапуск
         if "autostart" in new_settings:
             self.autostart_changed.emit(new_settings["autostart"])
+        
+        # Очищаем чат и обновляем инструкцию
+        self._chat_history_html = ""
+        self._showing_setup_instruction = False
+        self._update_chat_display()
+        self._update_setup_message()
+        
+        # Очищаем историю клиента
+        if self.gpt_client:
+            self.gpt_client.clear_history()
+        
+        # Обновляем баланс
+        self._update_balance()
     
     # === Локализация ===
     
@@ -812,9 +1256,10 @@ class OverlayWindow(QMainWindow):
         self.chat_display.setPlaceholderText(t("ask_question"))
         self.preview_label.setText(t("screenshot_preview"))
         self.screenshot_btn.setToolTip(t("take_screenshot"))
-        self.input_field.setPlaceholderText(t("enter_question"))
+        self._update_setup_message()  # Учитываем состояние настроек
         self.send_btn.setText(t("send"))
         self.clear_btn.setText(t("clear_chat"))
+        self.feedback_btn.setText(t("send_feedback"))
         self.model_label.setText(t("model"))
         self.settings_btn.setToolTip(t("settings"))
         

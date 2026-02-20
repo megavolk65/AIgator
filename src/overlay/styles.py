@@ -101,6 +101,18 @@ QPushButton#clearButton:hover {
     color: #e94560;
 }
 
+/* Кнопка отзыва */
+QPushButton#feedbackButton {
+    background-color: transparent;
+    color: #4fc3f7;
+    font-size: 12px;
+    padding: 5px 10px;
+}
+
+QPushButton#feedbackButton:hover {
+    color: #81d4fa;
+}
+
 /* Выбор модели */
 QComboBox#modelCombo {
     background-color: #16213e;
@@ -246,6 +258,17 @@ QLabel#titleLabel {
     color: #e94560;
 }
 
+/* Версия */
+QLabel#versionLabel {
+    color: #aaaaaa;
+    font-size: 12px;
+    padding-left: 5px;
+}
+
+QLabel#versionLabel:hover {
+    color: #4fc3f7;
+}
+
 /* Скроллбар */
 QScrollBar:vertical {
     background-color: #16213e;
@@ -311,6 +334,14 @@ QToolTip {
     border: 1px solid #0f3460;
     border-radius: 4px;
     padding: 5px;
+}
+
+/* Грип для изменения размера окна */
+QSizeGrip {
+    background-color: transparent;
+    width: 16px;
+    height: 16px;
+    image: none;
 }
 """
 

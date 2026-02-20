@@ -13,34 +13,58 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 import config
 
 
+# URL провайдеров
+PROVIDER_URLS = {
+    "openrouter": "https://openrouter.ai/api/v1",
+    "aitunnel": "https://api.aitunnel.ru/v1"
+}
+
+
 class OpenRouterClient:
-    """Клиент для работы с OpenRouter API"""
+    """Клиент для работы с OpenRouter/AITunnel API"""
     
     def __init__(self):
-        # Сначала пробуем загрузить из settings.json
-        self.api_key = self._load_api_key_from_settings()
+        # Загружаем настройки
+        settings = self._load_settings()
+        
+        self.api_key = settings.get('api_key', '')
         if not self.api_key:
             self.api_key = getattr(config, 'OPENROUTER_API_KEY', '')
         
+        # Определяем base_url по провайдеру
+        self.api_provider = settings.get('api_provider', 'openrouter')
+        self.base_url = PROVIDER_URLS.get(self.api_provider, PROVIDER_URLS['openrouter'])
+        
         self.model_name = getattr(config, 'OPENROUTER_MODEL', 'google/gemma-3-27b-it:free:online')
-        self.base_url = "https://openrouter.ai/api/v1"
         
         # История сообщений
         self.history = []
         self.current_game_name = None
     
-    def _load_api_key_from_settings(self) -> str:
-        """Загрузить API ключ из settings.json"""
+    def _load_settings(self) -> dict:
+        """Загрузить настройки из settings.json"""
         try:
-            settings_path = os.path.join(
-                os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
-                "settings.json"
-            )
+            # Определяем базовый путь (для PyInstaller и dev-режима)
+            if getattr(sys, 'frozen', False):
+                # Запущено как exe (PyInstaller)
+                base_path = os.path.dirname(sys.executable)
+            else:
+                # Запущено из исходников
+                base_path = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+            
+            settings_path = os.path.join(base_path, "settings.json")
+            
             with open(settings_path, 'r', encoding='utf-8') as f:
-                settings = json.load(f)
-                return settings.get('api_key', '')
+                return json.load(f)
         except:
-            return ''
+            return {}
+    
+    def reload_settings(self):
+        """Перезагрузить настройки (при смене провайдера)"""
+        settings = self._load_settings()
+        self.api_key = settings.get('api_key', '')
+        self.api_provider = settings.get('api_provider', 'openrouter')
+        self.base_url = PROVIDER_URLS.get(self.api_provider, PROVIDER_URLS['openrouter'])
     
     def send_message(self, text: str, screenshot_context: str = "") -> str:
         """
@@ -79,6 +103,40 @@ class OpenRouterClient:
         except Exception as e:
             return f"❌ Ошибка OpenRouter: {str(e)}"
     
+    def _compress_image(self, image_data: bytes, max_size: int = 1920, quality: int = 85) -> tuple[bytes, str]:
+        """
+        Сжать изображение для отправки
+        
+        Args:
+            image_data: Исходные байты изображения
+            max_size: Максимальный размер по большей стороне
+            quality: Качество JPEG (1-100)
+        
+        Returns:
+            (сжатые байты, mime-тип)
+        """
+        from PIL import Image
+        from io import BytesIO
+        
+        # Открываем изображение
+        img = Image.open(BytesIO(image_data))
+        
+        # Уменьшаем если слишком большое
+        if max(img.width, img.height) > max_size:
+            ratio = max_size / max(img.width, img.height)
+            new_size = (int(img.width * ratio), int(img.height * ratio))
+            img = img.resize(new_size, Image.Resampling.LANCZOS)
+        
+        # Конвертируем в RGB (для JPEG)
+        if img.mode in ('RGBA', 'P'):
+            img = img.convert('RGB')
+        
+        # Сохраняем в JPEG
+        buffer = BytesIO()
+        img.save(buffer, format='JPEG', quality=quality, optimize=True)
+        
+        return buffer.getvalue(), 'image/jpeg'
+    
     def send_request(self, prompt: str, image_data: Optional[bytes] = None) -> str:
         """
         Отправить запрос с возможным изображением
@@ -92,9 +150,12 @@ class OpenRouterClient:
         """
         try:
             if image_data:
-                # Конвертируем изображение в base64
+                # Сжимаем изображение
+                compressed_data, mime_type = self._compress_image(image_data)
+                
+                # Конвертируем в base64
                 import base64
-                image_base64 = base64.b64encode(image_data).decode('utf-8')
+                image_base64 = base64.b64encode(compressed_data).decode('utf-8')
                 
                 # Формируем сообщение с изображением
                 self.history.append({
@@ -107,7 +168,7 @@ class OpenRouterClient:
                         {
                             "type": "image_url",
                             "image_url": {
-                                "url": f"data:image/png;base64,{image_base64}"
+                                "url": f"data:{mime_type};base64,{image_base64}"
                             }
                         }
                     ]
@@ -162,7 +223,7 @@ class OpenRouterClient:
             f"{self.base_url}/chat/completions",
             headers=headers,
             json=payload,
-            timeout=60
+            timeout=120
         )
         
         response.raise_for_status()
@@ -225,3 +286,55 @@ class OpenRouterClient:
             "has_vision": "gemma-3" in self.model_name or "vision" in self.model_name,
             "history_length": len(self.history)
         }
+    
+    def get_balance(self) -> Optional[dict]:
+        """
+        Получить баланс аккаунта
+        
+        Returns:
+            dict с ключами 'balance' и 'currency' или None при ошибке
+        """
+        if not self.api_key:
+            return None
+        
+        try:
+            headers = {
+                "Authorization": f"Bearer {self.api_key}",
+                "Content-Type": "application/json"
+            }
+            
+            if self.api_provider == "aitunnel":
+                # AITunnel: GET /aitunnel/balance
+                response = requests.get(
+                    f"{self.base_url}/aitunnel/balance",
+                    headers=headers,
+                    timeout=10
+                )
+                response.raise_for_status()
+                data = response.json()
+                # AITunnel возвращает баланс в рублях
+                balance = data.get("balance", 0)
+                return {"balance": balance, "currency": "₽"}
+            else:
+                # OpenRouter: GET /credits
+                response = requests.get(
+                    f"{self.base_url}/credits",
+                    headers=headers,
+                    timeout=10
+                )
+                response.raise_for_status()
+                data = response.json()
+                # OpenRouter: {data: {total_credits, total_usage}}
+                credits_data = data.get("data", {})
+                total = credits_data.get("total_credits", 0)
+                used = credits_data.get("total_usage", 0)
+                balance = total - used
+                return {"balance": balance, "currency": "$"}
+        except:
+            return None
+    
+    def get_provider_name(self) -> str:
+        """Получить название провайдера"""
+        if self.api_provider == "aitunnel":
+            return "AITunnel"
+        return "OpenRouter"

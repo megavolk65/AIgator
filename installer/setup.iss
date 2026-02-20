@@ -1,10 +1,9 @@
 ; Inno Setup Script for AI Helper
-; Build the exe first: pyinstaller build.spec
-; Then compile this script with Inno Setup
+; Build: 1) pyinstaller build.spec  2) Compile this with Inno Setup
 
 #define MyAppName "AI Helper"
-#define MyAppVersion "1.0.0"
-#define MyAppPublisher "MEGAVOLK"
+#define MyAppVersion "0.9.1"
+#define MyAppPublisher "megavolk65"
 #define MyAppURL "https://github.com/megavolk65/ai-helper"
 #define MyAppExeName "AI Helper.exe"
 
@@ -15,55 +14,83 @@ AppVersion={#MyAppVersion}
 AppPublisher={#MyAppPublisher}
 AppPublisherURL={#MyAppURL}
 AppSupportURL={#MyAppURL}
-AppUpdatesURL={#MyAppURL}
+AppUpdatesURL={#MyAppURL}/releases
 DefaultDirName={autopf}\{#MyAppName}
 DefaultGroupName={#MyAppName}
 AllowNoIcons=yes
-LicenseFile=
-OutputDir=..\dist\installer
+OutputDir=..\dist
 OutputBaseFilename=AI_Helper_Setup_{#MyAppVersion}
 SetupIconFile=..\assets\icon.ico
-Compression=lzma
+UninstallDisplayIcon={app}\{#MyAppExeName}
+Compression=lzma2/ultra64
 SolidCompression=yes
 WizardStyle=modern
 PrivilegesRequired=lowest
 PrivilegesRequiredOverridesAllowed=dialog
+DisableProgramGroupPage=yes
 
 [Languages]
 Name: "russian"; MessagesFile: "compiler:Languages\Russian.isl"
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Tasks]
-Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
-Name: "autostart"; Description: "Запускать при старте Windows"; GroupDescription: "Дополнительно:"
+Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"
+Name: "autostart"; Description: "Запускать при старте Windows / Start with Windows"; GroupDescription: "Дополнительно / Additional:"; Flags: unchecked
 
 [Files]
 Source: "..\dist\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
-Source: "..\config.py"; DestDir: "{app}"; Flags: ignoreversion onlyifdoesntexist
-; Добавьте другие файлы если нужно
+Source: "..\settings.default.json"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
-Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
+Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\{#MyAppExeName}"
 Name: "{group}\{cm:UninstallProgram,{#MyAppName}}"; Filename: "{uninstallexe}"
-Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
+Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
 
 [Registry]
+; Автозапуск (если выбран)
 Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "{#MyAppName}"; ValueData: """{app}\{#MyAppExeName}"""; Flags: uninsdeletevalue; Tasks: autostart
 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
 
+[UninstallDelete]
+; Удаляем пользовательские файлы при удалении
+Type: files; Name: "{app}\settings.json"
+Type: dirifempty; Name: "{app}"
+
 [Code]
-// Показываем напоминание о настройке API ключей
 procedure CurStepChanged(CurStep: TSetupStep);
+var
+  SettingsFile: string;
+  SettingsContent: string;
+  Lang: string;
+  Provider: string;
 begin
   if CurStep = ssPostInstall then
   begin
-    MsgBox('Установка завершена!' + #13#10 + #13#10 + 
-           'Не забудьте настроить API-ключи Yandex Cloud в файле config.py:' + #13#10 +
-           '- YANDEX_FOLDER_ID' + #13#10 +
-           '- YANDEX_API_KEY' + #13#10 + #13#10 +
-           'Файл находится в папке установки: ' + ExpandConstant('{app}'),
-           mbInformation, MB_OK);
+    // Язык приложения = язык установщика
+    if ActiveLanguage = 'russian' then
+    begin
+      Lang := 'ru';
+      Provider := 'aitunnel';
+    end
+    else
+    begin
+      Lang := 'en';
+      Provider := 'openrouter';
+    end;
+    
+    SettingsFile := ExpandConstant('{app}\settings.json');
+    
+    SettingsContent := '{' + #13#10 +
+      '  "language": "' + Lang + '",' + #13#10 +
+      '  "api_key": "",' + #13#10 +
+      '  "api_provider": "' + Provider + '",' + #13#10 +
+      '  "models": []' + #13#10 +
+      '}';
+    
+    // Только при первой установке
+    if not FileExists(SettingsFile) then
+      SaveStringToFile(SettingsFile, SettingsContent, False);
   end;
 end;

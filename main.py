@@ -12,9 +12,24 @@ import sys
 import os
 import winreg
 import ctypes
+import shutil
 
 # Добавляем путь к модулям
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+
+def _ensure_settings():
+    """Создать settings.json из default если не существует"""
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    settings_path = os.path.join(base_dir, "settings.json")
+    default_path = os.path.join(base_dir, "settings.default.json")
+    
+    if not os.path.exists(settings_path) and os.path.exists(default_path):
+        shutil.copy(default_path, settings_path)
+
+
+# Создаём settings.json при первом запуске
+_ensure_settings()
 
 from PyQt6.QtWidgets import QApplication, QSystemTrayIcon, QMenu
 from PyQt6.QtGui import QIcon, QAction
