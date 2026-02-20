@@ -53,6 +53,10 @@ screenshots/
 *.jpg
 *.jpeg
 
+# Allow assets images
+!assets/*.png
+!assets/*.ico
+
 # Temp files
 *.tmp
 *.temp
