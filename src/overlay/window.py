@@ -208,6 +208,8 @@ class OverlayWindow(QMainWindow):
         self._chat_history_html = ""
         self._showing_setup_instruction = False  # Флаг: показана ли инструкция
         self.autostart_checker = None  # Функция для проверки состояния автозапуска
+        self._web_dialogs = set()  # Открытые браузеры
+        self._web_dialogs_were_visible = {}  # Состояние видимости перед скрытием
         
         # Загружаем язык из настроек
         self._load_language()
@@ -743,8 +745,11 @@ class OverlayWindow(QMainWindow):
         if 'openrouter.ai' in url_str or 'aitunnel.ru' in url_str or 'github.com' in url_str:
             QDesktopServices.openUrl(url)
         else:
+            # Немодальный браузер - скрывается/показывается вместе с главным окном
             dialog = WebDialog(self, url_str)
-            dialog.exec()
+            dialog.destroyed.connect(lambda: self._web_dialogs.discard(dialog))
+            self._web_dialogs.add(dialog)
+            dialog.show()
     
     def _on_send_message(self):
         """Отправка сообщения"""
@@ -893,6 +898,12 @@ class OverlayWindow(QMainWindow):
     def toggle_visibility(self):
         """Переключить видимость окна"""
         if self.isVisible():
+            # Скрываем все браузеры вместе с главным окном
+            self._web_dialogs_were_visible.clear()
+            for dialog in list(self._web_dialogs):
+                if dialog.isVisible():
+                    self._web_dialogs_were_visible[id(dialog)] = True
+                    dialog.hide()
             self.hide()
         else:
             # Сначала определяем контекст (пока оверлей скрыт)
@@ -915,6 +926,11 @@ class OverlayWindow(QMainWindow):
             self.show()
             self._force_focus_from_game()
             self.input_field.setFocus()
+            
+            # Восстанавливаем видимость браузеров
+            for dialog in list(self._web_dialogs):
+                if self._web_dialogs_were_visible.get(id(dialog), False):
+                    dialog.show()
     
     def _update_balance(self):
         """Обновить баланс в фоне"""

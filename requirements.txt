@@ -2,7 +2,7 @@
 PyQt6>=6.6.0
 
 # Hotkeys
-keyboard>=0.13.5
+pynput>=1.7.6
 
 # Windows API
 pywin32>=306

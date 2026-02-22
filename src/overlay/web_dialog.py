@@ -27,10 +27,13 @@ class WebDialog(QDialog):
         self.setWindowTitle(t("view"))
         self.resize(1350, 1050)
         self.setWindowFlags(
-            Qt.WindowType.Dialog |
+            Qt.WindowType.Window |
             Qt.WindowType.WindowCloseButtonHint |
-            Qt.WindowType.WindowMaximizeButtonHint
+            Qt.WindowType.WindowMaximizeButtonHint |
+            Qt.WindowType.WindowMinimizeButtonHint
         )
+        # Немодальный режим - не блокирует главное окно
+        self.setModal(False)
         
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
