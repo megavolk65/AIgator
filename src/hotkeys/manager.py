@@ -31,6 +31,7 @@ KEY_MAP = {
     'pgup': Key.page_up,
     'page_down': Key.page_down,
     'pagedown': Key.page_down,
+    'pgdown': Key.page_down,
     'pgdn': Key.page_down,
     'pause': Key.pause,
     'scroll_lock': Key.scroll_lock,
