@@ -839,6 +839,7 @@ class OverlayWindow(QMainWindow):
             self.screenshot_preview.setPixmap(pixmap)
             self.screenshot_preview_container.show()
             self.screenshot_indicator.setText(t("screenshot_attached"))
+            QTimer.singleShot(0, self._position_chat_elements)
         else:
             self._remove_screenshot()
     
@@ -850,6 +851,7 @@ class OverlayWindow(QMainWindow):
         self.screenshot_preview.clear()
         self.screenshot_preview_container.hide()
         self.screenshot_indicator.setText("")
+        QTimer.singleShot(0, self._position_chat_elements)
     
     def _update_context(self):
         """Обновить контекст (игра/приложение)"""

@@ -2,7 +2,7 @@
 ; Build: 1) pyinstaller build.spec  2) Compile this with Inno Setup
 
 #define MyAppName "AI Helper"
-#define MyAppVersion "0.9.3"
+#define MyAppVersion "0.9.4"
 #define MyAppPublisher "megavolk65"
 #define MyAppURL "https://github.com/megavolk65/ai-helper"
 #define MyAppExeName "AI Helper.exe"

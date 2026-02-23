@@ -227,11 +227,10 @@ class AIHelperApp(QObject):
                 2000
             )
         
-        # Показываем оверлей обратно
-        if show_after:
-            self.overlay.show()
-            self.overlay.activateWindow()
-            self.overlay.input_field.setFocus()
+        # Всегда показываем оверлей после скриншота
+        self.overlay.show()
+        self.overlay.activateWindow()
+        self.overlay.input_field.setFocus()
     
     @pyqtSlot(QSystemTrayIcon.ActivationReason)
     def _on_tray_activated(self, reason: QSystemTrayIcon.ActivationReason):
