@@ -1188,7 +1188,11 @@ class OverlayWindow(QMainWindow):
                 color: #ff4444;
             }
         """)
-        self.version_label.setToolTip(f"Доступна новая версия! Нажмите для загрузки")
+        lang = Localization.get_language()
+        if lang == "ru":
+            self.version_label.setToolTip("Доступна новая версия! Нажмите для загрузки")
+        else:
+            self.version_label.setToolTip("New version available! Click to download")
         
         # Ссылка: если есть прямой download — action://update, иначе GitHub
         link_url = "action://update" if download_url else release_url
