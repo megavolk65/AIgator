@@ -15,7 +15,7 @@
  */
 
 // === НАСТРОЙКИ ===
-const TELEGRAM_BOT_TOKEN = "8501159910:AAFCEX2xn7K9i--_LAKBaDjEN7DCbQflxYk";
+const TELEGRAM_BOT_TOKEN = "8694763342:AAG63LV5g7u2Y0OeO43l0U12RlbNCcT8sQk";
 const TELEGRAM_CHAT_ID = "426590628";
 const SHEET_NAME = "Telemetry";  // Имя листа в Google Sheet
 

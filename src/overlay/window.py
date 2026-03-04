@@ -1222,7 +1222,7 @@ class OverlayWindow(QMainWindow):
 
     def _on_feedback_click(self):
         """Клик по кнопке отзыва - открыть Телеграм"""
-        QDesktopServices.openUrl(QUrl("https://t.me/ai_helper_feedback_bot"))
+        QDesktopServices.openUrl(QUrl("https://t.me/aigator_feedback_bot"))
 
     def _on_version_click(self, event):
         """Клик по версии - открыть GitHub репозиторий или страницу релизов"""
