@@ -2,7 +2,7 @@
 Версия приложения
 """
 
-__version__ = "1.0.0"
+__version__ = "1.1.0"
 
 GITHUB_REPO = "megavolk65/AIgator"
 GITHUB_RELEASES_URL = f"https://github.com/{GITHUB_REPO}/releases"

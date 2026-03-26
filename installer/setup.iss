@@ -2,7 +2,7 @@
 ; Build: 1) pyinstaller build.spec  2) Compile this with Inno Setup
 
 #define MyAppName "AIgator"
-#define MyAppVersion "1.0.0"
+#define MyAppVersion "1.1.0"
 #define MyAppPublisher "megavolk65"
 #define MyAppURL "https://github.com/megavolk65/AIgator"
 #define MyAppExeName "AIgator.exe"
