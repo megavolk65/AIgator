@@ -47,6 +47,14 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
     "open_close": {"ru": "Открыть/закрыть:", "en": "Open/close:"},
     "screenshot": {"ru": "Скриншот:", "en": "Screenshot:"},
     "autostart": {"ru": "Запускать при старте Windows", "en": "Start with Windows"},
+    "telemetry_optin": {
+        "ru": "Отправлять анонимную статистику (только версия приложения)",
+        "en": "Send anonymous statistics (app version only)",
+    },
+    "telemetry_tooltip": {
+        "ru": "Раз в сутки отправляется номер версии и флаг первого запуска.\nНикаких идентификаторов и личных данных. Исходник бэкенда открыт:\ntelemetry_backend/apps_script.js в репозитории.",
+        "en": "Once a day the app sends its version number and a first-launch flag.\nNo identifiers, no personal data. Backend source is public:\ntelemetry_backend/apps_script.js in the repository.",
+    },
     "cancel": {"ru": "Отмена", "en": "Cancel"},
     "save": {"ru": "Сохранить", "en": "Save"},
     "add_model": {"ru": "Добавить модель", "en": "Add model"},

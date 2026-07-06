@@ -56,6 +56,7 @@ def _ensure_settings():
                 "api_provider": "openrouter",
                 "models": [],
                 "autostart": False,
+                "telemetry_enabled": True,
                 "language": sys_lang,
             }
             with open(settings_path, "w", encoding="utf-8") as f:

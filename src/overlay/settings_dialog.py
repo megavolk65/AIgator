@@ -43,7 +43,7 @@ class SettingsDialog(QDialog):
     def _init_ui(self):
         """Инициализация интерфейса"""
         self.setWindowTitle(t("settings"))
-        self.setFixedSize(500, 550)
+        self.setFixedSize(500, 585)
         self.setWindowFlags(
             self.windowFlags() & ~Qt.WindowType.WindowContextHelpButtonHint
         )
@@ -165,6 +165,11 @@ class SettingsDialog(QDialog):
         self.autostart_checkbox = QCheckBox(t("autostart"))
         layout.addWidget(self.autostart_checkbox)
 
+        # === Телеметрия ===
+        self.telemetry_checkbox = QCheckBox(t("telemetry_optin"))
+        self.telemetry_checkbox.setToolTip(t("telemetry_tooltip"))
+        layout.addWidget(self.telemetry_checkbox)
+
         # === Кнопки ===
         buttons_layout = QHBoxLayout()
         buttons_layout.addStretch()
@@ -277,6 +282,10 @@ class SettingsDialog(QDialog):
         # Автозапуск
         autostart = self.current_settings.get("autostart", False)
         self.autostart_checkbox.setChecked(autostart)
+
+        # Телеметрия (по умолчанию включена)
+        telemetry_enabled = self.current_settings.get("telemetry_enabled", True)
+        self.telemetry_checkbox.setChecked(bool(telemetry_enabled))
 
     def _add_model_item(self, model_id: str, display_name: str):
         """Добавить элемент модели с кнопкой удаления"""
@@ -398,6 +407,9 @@ class SettingsDialog(QDialog):
         # Автозапуск
         autostart = self.autostart_checkbox.isChecked()
 
+        # Телеметрия
+        telemetry_enabled = self.telemetry_checkbox.isChecked()
+
         # Формируем настройки
         new_settings = {
             **self.current_settings,
@@ -407,6 +419,7 @@ class SettingsDialog(QDialog):
             "hotkey_overlay": hotkey_overlay,
             "hotkey_screenshot": hotkey_screenshot,
             "autostart": autostart,
+            "telemetry_enabled": telemetry_enabled,
         }
 
         # Отправляем сигнал

@@ -40,12 +40,8 @@ env/
 # Logs
 *.log
 
-# Local config (contains API keys)
-config.py
+# User settings (живут в %APPDATA%\AIgator, здесь — на всякий случай)
 settings.json
-
-# Yandex Cloud authorized keys (CRITICAL - contains private keys!)
-authorized_key.json
 
 # Screenshots
 screenshots/

@@ -6,6 +6,7 @@
   "api_provider": "openrouter",
   "models": [],
   "autostart": false,
+  "telemetry_enabled": true,
   "language": "ru"
 }
 
