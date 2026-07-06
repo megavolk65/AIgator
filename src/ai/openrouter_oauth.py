@@ -126,16 +126,13 @@ def perform_oauth(
 # Модели, которые не стоит предлагать новичку по умолчанию
 _SKIP_MARKERS = ("safety", "guard", "coder", "code")
 
-# Фоллбэк, если каталог недоступен (актуален на июль 2026)
+# Фоллбэк, если каталог недоступен (актуален на июль 2026, все — vision)
 _FALLBACK_MODELS = [
     ("google/gemma-4-31b-it:free", "GOOGLE: Gemma 4 31B (free)"),
+    ("google/gemma-4-26b-a4b-it:free", "GOOGLE: Gemma 4 26B A4B (free)"),
     (
         "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
         "NVIDIA: Nemotron 3 Nano Omni (free)",
-    ),
-    (
-        "nvidia/nemotron-3-super-120b-a12b:free",
-        "NVIDIA: Nemotron 3 Super 120B (free)",
     ),
 ]
 
@@ -171,7 +168,11 @@ def pick_free_models(max_models: int = 3) -> list:
         vision.sort(key=rank, reverse=True)
         text_only.sort(key=rank, reverse=True)
 
-        picked = vision[:2] + text_only[:1]
+        # Скриншоты — ключевая фича: берём только vision-модели,
+        # текстовыми добиваем лишь если vision-моделей не хватает
+        picked = vision[:max_models]
+        if len(picked) < max_models:
+            picked += text_only[: max_models - len(picked)]
         result = [(m["id"], m.get("name") or m["id"]) for m in picked[:max_models]]
         return result or list(_FALLBACK_MODELS)
     except Exception:

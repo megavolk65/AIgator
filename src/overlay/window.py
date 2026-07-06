@@ -1663,9 +1663,20 @@ class OverlayWindow(QMainWindow):
         if self.autostart_checker:
             current_settings["autostart"] = self.autostart_checker()
 
+        # Немодальный диалог: не блокирует оверлей и не зависает поверх
+        # браузера во время OAuth-подключения
+        existing = getattr(self, "_settings_dialog", None)
+        if existing is not None and existing.isVisible():
+            existing.raise_()
+            existing.activateWindow()
+            return
+        if existing is not None:
+            existing.deleteLater()
+
         dialog = SettingsDialog(self, current_settings)
         dialog.settings_saved.connect(self._on_settings_saved)
-        dialog.exec()
+        self._settings_dialog = dialog
+        dialog.show()
 
     def _on_settings_saved(self, new_settings: dict):
         """Обработчик сохранения настроек"""

@@ -346,8 +346,32 @@ class SettingsDialog(QDialog):
         self._oauth_worker.failed.connect(self._on_oauth_failed)
         self._oauth_worker.start()
 
+        # Прячем настройки и оверлей (они topmost и закрывают браузер);
+        # вернём их, когда флоу завершится
+        self._hidden_for_oauth = True
+        overlay = self.parent()
+        if overlay is not None and overlay.isVisible():
+            self._overlay_was_visible = True
+            overlay.hide()
+        else:
+            self._overlay_was_visible = False
+        self.hide()
+
+    def _restore_after_oauth(self):
+        """Вернуть окна после завершения OAuth"""
+        if not getattr(self, "_hidden_for_oauth", False):
+            return
+        self._hidden_for_oauth = False
+        overlay = self.parent()
+        if overlay is not None and self._overlay_was_visible:
+            overlay.show()
+        self.show()
+        self.raise_()
+        self.activateWindow()
+
     def _on_oauth_success(self, api_key: str, models: list):
         """Ключ получен — заполняем поле и добавляем бесплатные модели"""
+        self._restore_after_oauth()
         self.api_key_input.setText(api_key)
 
         # Добавляем модели, которых ещё нет в списке
@@ -367,6 +391,7 @@ class SettingsDialog(QDialog):
 
     def _on_oauth_failed(self, error: str):
         """OAuth не удался"""
+        self._restore_after_oauth()
         self.oauth_btn.setEnabled(True)
         self.oauth_status.setText(f"{t('oauth_error')} {error[:120]}")
         self.oauth_status.setStyleSheet("color: #ff6b6b; font-size: 11px;")
