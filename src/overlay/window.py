@@ -209,15 +209,17 @@ class BalanceWorker(QThread):
         try:
             result = self.gpt_client.get_balance()
             provider = self.gpt_client.get_provider_name()
-            if result:
-                result["provider"] = provider
-                self.balance_ready.emit(result)
-            else:
-                self.balance_ready.emit(
-                    {"provider": provider, "balance": None, "currency": ""}
-                )
-        except:
-            pass
+        except Exception:
+            result, provider = None, ""
+
+        if result:
+            result["provider"] = provider
+            self.balance_ready.emit(result)
+        else:
+            # Сигнал уходит всегда — на None окно планирует повторную попытку
+            self.balance_ready.emit(
+                {"provider": provider, "balance": None, "currency": ""}
+            )
 
 
 class AIWorker(QThread):
@@ -276,7 +278,8 @@ class OverlayWindow(QMainWindow):
         self._current_screenshot_bytes: Optional[bytes] = None  # Байты изображения
         self._current_app_context = ""  # Название активного окна/игры
         self._worker: Optional[AIWorker] = None
-        self._balance_worker: Optional[BalanceWorker] = None
+        self._balance_workers = set()  # Живые воркеры до finished
+        self._balance_retry_count = 0
         self._update_worker: Optional[UpdateCheckerWorker] = None
         self._new_version: Optional[str] = None  # Новая версия если есть
         self._new_version_url: Optional[str] = None
@@ -770,6 +773,55 @@ class OverlayWindow(QMainWindow):
         self._update_chat_display()
         self._update_hotkeys_hint()
 
+    def _chat_hint_font_px(self) -> int:
+        """Размер шрифта хинта в зависимости от высоты области чата"""
+        if not hasattr(self, "_chat_inner"):
+            return 18
+        # Без жёстких переносов абзацы занимают ~10-12 строк
+        h = self._chat_inner.height()
+        return max(13, min(22, h // 24))
+
+    def _build_chat_hint_html(self) -> str:
+        """Собрать HTML хинта пустого чата под текущий размер окна"""
+        px = self._chat_hint_font_px()
+        self._chat_hint_px = px
+        lang = Localization.get_language()
+        if lang == "ru":
+            paragraphs = [
+                [
+                    "Для корректной работы оверлея запустите игру в режиме «без рамок» (borderless) или «в окне».",
+                    "В эксклюзивном полноэкранном режиме оверлей поверх игры не отобразится.",
+                ],
+                [
+                    "AIgator уже знает, из какой игры или приложения его вызвали, поэтому можно не упоминать это в вопросе.",
+                    "Вы можете добавить скриншот нужного места, чтобы подробнее описать свой запрос.",
+                ],
+                [
+                    "Модели могут ошибаться в игровых фактах.",
+                    "Галочка «Веб-поиск» внизу даёт ответ с проверкой в интернете и ссылками на источники (платно, ~2 ₽ за вопрос).",
+                ],
+            ]
+        else:
+            paragraphs = [
+                [
+                    'For the overlay to work correctly, run the game in "borderless" or "windowed" mode.',
+                    "In exclusive fullscreen mode, the overlay will not be displayed on top of the game.",
+                ],
+                [
+                    "AIgator already knows which game or app it was called from, so there's no need to mention it in your question.",
+                    "You can add a screenshot of the relevant area to describe your request in more detail.",
+                ],
+                [
+                    "Models can get game facts wrong.",
+                    'The "Web search" checkbox below verifies answers online and adds source links (paid, ~$0.02 per question).',
+                ],
+            ]
+        body = "<br><br>".join("<br>".join(sentences) for sentences in paragraphs)
+        return (
+            f'<span style="color: #666666; font-size: {px}px; line-height: 1.5;">'
+            f"{body}</span>"
+        )
+
     def _update_hotkeys_hint(self):
         """Показать/скрыть подсказку горячих клавиш и хинт в чате"""
         if not hasattr(self, "hotkeys_hint"):
@@ -782,39 +834,7 @@ class OverlayWindow(QMainWindow):
         if hasattr(self, "chat_hint"):
             show_hint = chat_is_empty and not self._showing_setup_instruction
             if show_hint:
-                lang = Localization.get_language()
-                if lang == "ru":
-                    hint_html = (
-                        '<span style="color: #666666; font-size: 22px; line-height: 1.6;">'
-                        "Для корректной работы оверлея запустите игру<br>"
-                        "в режиме «без рамок» (borderless) или «в окне».<br>"
-                        "В эксклюзивном полноэкранном режиме оверлей<br>"
-                        "поверх игры не отобразится.<br><br>"
-                        "AIgator уже знает из какой игры или приложения<br>"
-                        "его вызвали, поэтому можно не упоминать это в вопросе.<br><br>"
-                        "Вы можете добавить скриншот нужного места,<br>"
-                        "чтобы подробнее описать свой запрос.<br><br>"
-                        "Модели могут ошибаться в игровых фактах. Галочка<br>"
-                        "«Веб-поиск» внизу даёт ответ с проверкой в интернете<br>"
-                        "и ссылками на источники (платно, ~2 ₽ за вопрос).</span>"
-                    )
-                else:
-                    hint_html = (
-                        '<span style="color: #666666; font-size: 22px; line-height: 1.6;">'
-                        "For the overlay to work correctly, run the game<br>"
-                        'in "borderless" or "windowed" mode.<br>'
-                        "In exclusive fullscreen mode, the overlay<br>"
-                        "will not be displayed on top of the game.<br><br>"
-                        "AIgator already knows which game<br>"
-                        "or app it was called from, so there's no need<br>"
-                        "to mention it in your question.<br><br>"
-                        "You can add a screenshot of the relevant area<br>"
-                        "to describe your request in more detail.<br><br>"
-                        "Models can get game facts wrong. The \"Web search\"<br>"
-                        "checkbox below verifies answers online and adds<br>"
-                        "source links (paid, ~$0.02 per question).</span>"
-                    )
-                self.chat_hint.setText(hint_html)
+                self.chat_hint.setText(self._build_chat_hint_html())
                 self.chat_hint.show()
                 self.chat_hint.raise_()
             else:
@@ -1207,10 +1227,21 @@ class OverlayWindow(QMainWindow):
 
     def _update_balance(self):
         """Обновить баланс в фоне"""
-        if self.gpt_client:
-            self._balance_worker = BalanceWorker(self.gpt_client)
-            self._balance_worker.balance_ready.connect(self._on_balance_ready)
-            self._balance_worker.start()
+        if not self.gpt_client:
+            return
+
+        # Пока грузится первый раз — показываем троеточие
+        if not self.provider_balance_label.text():
+            self.provider_balance_label.setText("…")
+
+        # Воркер живёт в set до finished — перезапись ссылки роняла поток
+        worker = BalanceWorker(self.gpt_client)
+        worker.balance_ready.connect(self._on_balance_ready)
+        worker.finished.connect(
+            lambda w=worker: (self._balance_workers.discard(w), w.deleteLater())
+        )
+        self._balance_workers.add(worker)
+        worker.start()
 
     def _on_balance_ready(self, data: dict):
         """Обработчик получения баланса"""
@@ -1219,6 +1250,7 @@ class OverlayWindow(QMainWindow):
         currency = data.get("currency", "")
 
         if balance is not None:
+            self._balance_retry_count = 0
             # Форматируем баланс
             if balance >= 100:
                 balance_str = f"{balance:.0f}"
@@ -1227,6 +1259,10 @@ class OverlayWindow(QMainWindow):
             self.provider_balance_label.setText(f"{provider} • {balance_str}{currency}")
         else:
             self.provider_balance_label.setText(provider)
+            # Провайдер иногда отвечает дольше таймаута — пробуем ещё раз
+            if self._balance_retry_count < 2:
+                self._balance_retry_count += 1
+                QTimer.singleShot(5000, self._update_balance)
 
     def _on_balance_click(self, event):
         """Клик по балансу - открыть страницу трат"""
@@ -1464,16 +1500,29 @@ class OverlayWindow(QMainWindow):
             )
             self.clear_btn.raise_()
 
-            # Позиционируем хинт по центру чата
+            # Позиционируем хинт по центру чата (с пересчётом шрифта под размер)
             if hasattr(self, "chat_hint") and self.chat_hint.isVisible():
+                if self._chat_hint_font_px() != getattr(self, "_chat_hint_px", None):
+                    self.chat_hint.setText(self._build_chat_hint_html())
+
+                # Не залезаем на подсказку горячих клавиш внизу
+                bottom_reserved = 0
+                if hasattr(self, "hotkeys_hint") and self.hotkeys_hint.isVisible():
+                    bottom_reserved = self.hotkeys_hint.sizeHint().height() + 20
+
                 hint_width = self._chat_inner.width() - 60
-                hint_height = self.chat_hint.sizeHint().height()
-                self.chat_hint.setGeometry(
-                    30,
-                    (self._chat_inner.height() - hint_height) // 2,
-                    hint_width,
-                    hint_height,
+                wrapped_height = self.chat_hint.heightForWidth(hint_width)
+                if wrapped_height <= 0:
+                    wrapped_height = self.chat_hint.sizeHint().height()
+                hint_height = min(
+                    wrapped_height,
+                    self._chat_inner.height() - bottom_reserved - 20,
                 )
+                y = max(
+                    10,
+                    (self._chat_inner.height() - bottom_reserved - hint_height) // 2,
+                )
+                self.chat_hint.setGeometry(30, y, hint_width, hint_height)
                 self.chat_hint.raise_()
 
             # Позиционируем подсказку горячих клавиш внизу по центру
