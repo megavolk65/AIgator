@@ -19,8 +19,8 @@ OPENROUTER_MODEL = "anthropic/claude-haiku-4.5"
 # Дефолтные модели для OpenRouter (пусто по умолчанию)
 OPENROUTER_MODELS = []
 
-# Дефолтные модели для AITunnel (пусто по умолчанию)
-AITUNNEL_MODELS = []
+# Дефолтные модели для RouterAI (пусто по умолчанию)
+ROUTERAI_MODELS = []
 
 
 # =============================================================================

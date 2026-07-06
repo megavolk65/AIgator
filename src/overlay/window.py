@@ -730,7 +730,7 @@ class OverlayWindow(QMainWindow):
                     и введите API-ключ в <a href="action://settings" style="color: #ff9800;">настройках</a>.<br>
                     <br>
                     Если вас не устраивает качество ответов бесплатных моделей — можно добавить другие бесплатные или платные (более качественные) модели:<br>
-                    &bull; Российские карты — <a href="https://aitunnel.ru" style="color: #4fc3f7;">AITunnel</a><br>
+                    &bull; Российские карты — <a href="https://routerai.ru" style="color: #4fc3f7;">RouterAI</a><br>
                     &bull; Зарубежные карты — <a href="https://openrouter.ai/keys" style="color: #4fc3f7;">OpenRouter</a>
                 </div>
             </div>
@@ -746,7 +746,7 @@ class OverlayWindow(QMainWindow):
                     <br>
                     You can also add other free or paid (higher quality) models:<br>
                     &bull; Pay in $ — <a href="https://openrouter.ai/keys" style="color: #4fc3f7;">OpenRouter</a><br>
-                    &bull; Pay in ₽ — <a href="https://aitunnel.ru" style="color: #4fc3f7;">AITunnel</a>
+                    &bull; Pay in ₽ — <a href="https://routerai.ru" style="color: #4fc3f7;">RouterAI</a>
                 </div>
             </div>
             """
@@ -925,7 +925,7 @@ class OverlayWindow(QMainWindow):
         # API провайдеры и GitHub открываем во внешнем браузере
         if (
             "openrouter.ai" in url_str
-            or "aitunnel.ru" in url_str
+            or "routerai.ru" in url_str
             or "github.com" in url_str
         ):
             QDesktopServices.openUrl(url)
@@ -1213,8 +1213,8 @@ class OverlayWindow(QMainWindow):
         settings = self._load_settings()
         provider = settings.get("api_provider", "openrouter")
 
-        if provider == "aitunnel":
-            url = "https://aitunnel.ru/panel/stats"
+        if provider == "routerai":
+            url = "https://routerai.ru"
         else:
             url = "https://openrouter.ai/activity"
 
@@ -1498,8 +1498,8 @@ class OverlayWindow(QMainWindow):
         # Если в настройках пусто - используем дефолтные в зависимости от провайдера
         if not models:
             provider = settings.get("api_provider", "openrouter")
-            if provider == "aitunnel":
-                models = getattr(config, "AITUNNEL_MODELS", [])
+            if provider == "routerai":
+                models = getattr(config, "ROUTERAI_MODELS", [])
             else:
                 models = getattr(config, "OPENROUTER_MODELS", [])
 
@@ -1577,8 +1577,8 @@ class OverlayWindow(QMainWindow):
         # Добавляем текущие модели (в зависимости от провайдера)
         if "models" not in current_settings or not current_settings["models"]:
             provider = current_settings.get("api_provider", "openrouter")
-            if provider == "aitunnel":
-                current_settings["models"] = getattr(config, "AITUNNEL_MODELS", [])
+            if provider == "routerai":
+                current_settings["models"] = getattr(config, "ROUTERAI_MODELS", [])
             else:
                 current_settings["models"] = getattr(config, "OPENROUTER_MODELS", [])
 

@@ -62,7 +62,7 @@ class SettingsDialog(QDialog):
 
         self.provider_combo = QComboBox()
         self.provider_combo.addItem(t("provider_openrouter"), "openrouter")
-        self.provider_combo.addItem(t("provider_aitunnel"), "aitunnel")
+        self.provider_combo.addItem(t("provider_routerai"), "routerai")
         self.provider_combo.currentIndexChanged.connect(self._on_provider_changed)
         provider_layout.addWidget(self.provider_combo, 1)
 
@@ -253,7 +253,7 @@ class SettingsDialog(QDialog):
         if provider == "openrouter":
             self.api_key_input.setPlaceholderText("sk-or-v1-...")
         else:
-            self.api_key_input.setPlaceholderText("sk-aitunnel-...")
+            self.api_key_input.setPlaceholderText("sk-...")
 
     def _load_current_settings(self):
         """Загрузить текущие настройки в поля"""
@@ -376,11 +376,11 @@ class SettingsDialog(QDialog):
                     "OpenRouter API key should start with 'sk-or-'",
                 )
                 return
-            elif api_provider == "aitunnel" and not api_key.startswith("sk-aitunnel-"):
+            elif api_provider == "routerai" and not api_key.startswith("sk-"):
                 QMessageBox.warning(
                     self,
                     t("error").replace("❌ ", ""),
-                    "AITunnel API key should start with 'sk-aitunnel-'",
+                    "RouterAI API key should start with 'sk-'",
                 )
                 return
 

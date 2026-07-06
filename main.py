@@ -32,6 +32,20 @@ def _ensure_settings():
 
     default_path = os.path.join(base_dir, "settings.default.json")
 
+    # Миграция: провайдер AITunnel заменён на RouterAI (v1.2.0)
+    if os.path.exists(settings_path):
+        try:
+            import json
+
+            with open(settings_path, "r", encoding="utf-8") as f:
+                settings = json.load(f)
+            if settings.get("api_provider") == "aitunnel":
+                settings["api_provider"] = "routerai"
+                with open(settings_path, "w", encoding="utf-8") as f:
+                    json.dump(settings, f, ensure_ascii=False, indent=2)
+        except Exception:
+            pass
+
     if not os.path.exists(settings_path):
         if os.path.exists(default_path):
             shutil.copy(default_path, settings_path)

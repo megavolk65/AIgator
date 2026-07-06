@@ -18,12 +18,12 @@ import config
 # URL провайдеров
 PROVIDER_URLS = {
     "openrouter": "https://openrouter.ai/api/v1",
-    "aitunnel": "https://api.aitunnel.ru/v1",
+    "routerai": "https://routerai.ru/api/v1",
 }
 
 
 class OpenRouterClient:
-    """Клиент для работы с OpenRouter/AITunnel API"""
+    """Клиент для работы с OpenRouter/RouterAI API (OpenRouter-совместимые)"""
 
     def __init__(self):
         # Загружаем настройки
@@ -287,34 +287,23 @@ class OpenRouterClient:
                 "Content-Type": "application/json",
             }
 
-            if self.api_provider == "aitunnel":
-                # AITunnel: GET /aitunnel/balance
-                response = requests.get(
-                    f"{self.base_url}/aitunnel/balance", headers=headers, timeout=10
-                )
-                response.raise_for_status()
-                data = response.json()
-                # AITunnel возвращает баланс в рублях
-                balance = data.get("balance", 0)
-                return {"balance": balance, "currency": "₽"}
-            else:
-                # OpenRouter: GET /credits
-                response = requests.get(
-                    f"{self.base_url}/credits", headers=headers, timeout=10
-                )
-                response.raise_for_status()
-                data = response.json()
-                # OpenRouter: {data: {total_credits, total_usage}}
-                credits_data = data.get("data", {})
-                total = credits_data.get("total_credits", 0)
-                used = credits_data.get("total_usage", 0)
-                balance = total - used
-                return {"balance": balance, "currency": "$"}
+            # OpenRouter и RouterAI: GET /credits -> {data: {total_credits, total_usage}}
+            response = requests.get(
+                f"{self.base_url}/credits", headers=headers, timeout=10
+            )
+            response.raise_for_status()
+            data = response.json()
+            credits_data = data.get("data", {})
+            total = credits_data.get("total_credits", 0)
+            used = credits_data.get("total_usage", 0)
+            balance = total - used
+            currency = "₽" if self.api_provider == "routerai" else "$"
+            return {"balance": balance, "currency": currency}
         except:
             return None
 
     def get_provider_name(self) -> str:
         """Получить название провайдера"""
-        if self.api_provider == "aitunnel":
-            return "AITunnel"
+        if self.api_provider == "routerai":
+            return "RouterAI"
         return "OpenRouter"

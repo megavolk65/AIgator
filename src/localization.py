@@ -73,9 +73,9 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
         "ru": "OpenRouter (международный)",
         "en": "OpenRouter (international)",
     },
-    "provider_aitunnel": {
-        "ru": "AITunnel (оплата в рублях)",
-        "en": "AITunnel (payment in rubles)",
+    "provider_routerai": {
+        "ru": "RouterAI (оплата в рублях)",
+        "en": "RouterAI (payment in rubles)",
     },
     # === Трей ===
     "show": {"ru": "Показать", "en": "Show"},
