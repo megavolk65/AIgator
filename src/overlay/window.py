@@ -793,7 +793,10 @@ class OverlayWindow(QMainWindow):
                         "AIgator уже знает из какой игры или приложения<br>"
                         "его вызвали, поэтому можно не упоминать это в вопросе.<br><br>"
                         "Вы можете добавить скриншот нужного места,<br>"
-                        "чтобы подробнее описать свой запрос.</span>"
+                        "чтобы подробнее описать свой запрос.<br><br>"
+                        "Модели могут ошибаться в игровых фактах. Галочка<br>"
+                        "«Веб-поиск» внизу даёт ответ с проверкой в интернете<br>"
+                        "и ссылками на источники (платно, ~2 ₽ за вопрос).</span>"
                     )
                 else:
                     hint_html = (
@@ -806,7 +809,10 @@ class OverlayWindow(QMainWindow):
                         "or app it was called from, so there's no need<br>"
                         "to mention it in your question.<br><br>"
                         "You can add a screenshot of the relevant area<br>"
-                        "to describe your request in more detail.</span>"
+                        "to describe your request in more detail.<br><br>"
+                        "Models can get game facts wrong. The \"Web search\"<br>"
+                        "checkbox below verifies answers online and adds<br>"
+                        "source links (paid, ~$0.02 per question).</span>"
                     )
                 self.chat_hint.setText(hint_html)
                 self.chat_hint.show()

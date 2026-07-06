@@ -228,9 +228,36 @@ class OpenRouterClient:
         result = response.json()
 
         if "choices" in result and len(result["choices"]) > 0:
-            return result["choices"][0]["message"]["content"]
+            message = result["choices"][0]["message"]
+            content = message.get("content", "")
+
+            # Ссылки-источники от веб-плагина (annotations -> url_citation)
+            sources = self._extract_sources(message)
+            if sources:
+                from src.localization import t
+
+                content += f"\n\n**{t('sources')}:**\n" + "\n".join(
+                    f"- [{title}]({url})" for url, title in sources
+                )
+
+            return content
         else:
             raise Exception(f"Неожиданный ответ API: {result}")
+
+    @staticmethod
+    def _extract_sources(message: dict) -> list:
+        """Достать ссылки на источники из annotations (веб-поиск)"""
+        sources = []
+        try:
+            for ann in message.get("annotations") or []:
+                citation = ann.get("url_citation") or {}
+                url = citation.get("url")
+                title = (citation.get("title") or url or "").strip()
+                if url and url not in [u for u, _ in sources]:
+                    sources.append((url, title))
+        except Exception:
+            pass
+        return sources[:5]
 
     def clear_history(self):
         """Очистить историю чата"""
@@ -267,8 +294,20 @@ class OpenRouterClient:
             else:
                 system_text = "Ты универсальный AI-помощник. Отвечай кратко и по делу."
 
+            # Анти-галлюцинации: честность важнее уверенности
+            system_text += (
+                " Если не уверен в конкретном игровом факте (название предмета,"
+                " NPC, локации, шаги квеста) — прямо скажи, что не уверен,"
+                " и предложи проверить в вики игры. Никогда не выдумывай"
+                " конкретику и не сочиняй URL — ссылки давай только на главные"
+                " страницы известных ресурсов."
+            )
+
             if self.web_search:
-                system_text += " Используй поиск для актуальной информации."
+                system_text += (
+                    " Используй веб-поиск для актуальной информации."
+                    " В конце ответа приведи ссылки на использованные источники."
+                )
 
             if context_info:
                 system_text += f"\n\nДополнительный контекст: {context_info}"

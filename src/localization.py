@@ -104,6 +104,7 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
     "send_feedback": {"ru": "Отправить отзыв", "en": "Send feedback"},
     # === Веб-поиск ===
     "web_search": {"ru": "Веб-поиск", "en": "Web search"},
+    "sources": {"ru": "Источники", "en": "Sources"},
     "web_search_tooltip": {
         "ru": "Разрешить модели искать в интернете (для актуальной информации).\nВнимание: поиск платный — примерно +2 ₽ (~$0.02) к каждому сообщению,\nдаже на бесплатных моделях.",
         "en": "Allow the model to search the web (for up-to-date info).\nNote: search is paid — roughly +$0.02 per message,\neven on free models.",
