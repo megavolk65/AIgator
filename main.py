@@ -71,6 +71,7 @@ def _ensure_settings():
                 "models": [],
                 "autostart": False,
                 "telemetry_enabled": True,
+                "web_search": False,
                 "language": sys_lang,
             }
             with open(settings_path, "w", encoding="utf-8") as f:

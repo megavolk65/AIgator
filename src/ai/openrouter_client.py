@@ -43,6 +43,9 @@ class OpenRouterClient:
             config, "OPENROUTER_MODEL", "google/gemma-3-27b-it:free:online"
         )
 
+        # Веб-поиск (платный плагин — по умолчанию выключен)
+        self.web_search = bool(settings.get("web_search", False))
+
         # История сообщений
         self.history = []
         self.current_game_name = None
@@ -64,6 +67,11 @@ class OpenRouterClient:
         self.base_url = PROVIDER_URLS.get(
             self.api_provider, PROVIDER_URLS["openrouter"]
         )
+        self.web_search = bool(settings.get("web_search", False))
+
+    def set_web_search(self, enabled: bool):
+        """Включить/выключить платный веб-поиск"""
+        self.web_search = bool(enabled)
 
     def send_message(self, text: str, screenshot_context: str = "") -> str:
         """
@@ -203,8 +211,11 @@ class OpenRouterClient:
         payload = {
             "model": self.model_name,
             "messages": messages,
-            "plugins": [{"id": "web", "max_results": 5}],
         }
+
+        # Веб-поиск — платный плагин (~$0.02/запрос), только по явному согласию
+        if self.web_search:
+            payload["plugins"] = [{"id": "web", "max_results": 5}]
 
         response = requests.post(
             f"{self.base_url}/chat/completions",
@@ -252,9 +263,12 @@ class OpenRouterClient:
         # Если история пуста - добавляем системный промпт
         if len(self.history) == 0:
             if game_name:
-                system_text = f"Ты AI-помощник для игры {game_name}. Помогай с прохождением, подсказывай локации, объясняй механики. Используй поиск для актуальной информации."
+                system_text = f"Ты AI-помощник для игры {game_name}. Помогай с прохождением, подсказывай локации, объясняй механики."
             else:
-                system_text = "Ты универсальный AI-помощник. Отвечай кратко и по делу. Используй поиск для актуальной информации."
+                system_text = "Ты универсальный AI-помощник. Отвечай кратко и по делу."
+
+            if self.web_search:
+                system_text += " Используй поиск для актуальной информации."
 
             if context_info:
                 system_text += f"\n\nДополнительный контекст: {context_info}"
@@ -287,16 +301,21 @@ class OpenRouterClient:
                 "Content-Type": "application/json",
             }
 
-            # OpenRouter и RouterAI: GET /credits -> {data: {total_credits, total_usage}}
+            # GET /credits.
+            # OpenRouter: {data: {total_credits, total_usage}}
+            # RouterAI:   {data: {credits}}
             response = requests.get(
                 f"{self.base_url}/credits", headers=headers, timeout=10
             )
             response.raise_for_status()
             data = response.json()
             credits_data = data.get("data", {})
-            total = credits_data.get("total_credits", 0)
-            used = credits_data.get("total_usage", 0)
-            balance = total - used
+            if "credits" in credits_data:
+                balance = credits_data.get("credits", 0)
+            else:
+                total = credits_data.get("total_credits", 0)
+                used = credits_data.get("total_usage", 0)
+                balance = total - used
             currency = "₽" if self.api_provider == "routerai" else "$"
             return {"balance": balance, "currency": currency}
         except:

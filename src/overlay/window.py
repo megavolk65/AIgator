@@ -624,6 +624,20 @@ class OverlayWindow(QMainWindow):
 
         footer_layout.addStretch()
 
+        # Веб-поиск (платный плагин, по умолчанию выключен)
+        from PyQt6.QtWidgets import QCheckBox
+
+        self.web_search_checkbox = QCheckBox(t("web_search"))
+        self.web_search_checkbox.setToolTip(t("web_search_tooltip"))
+        self.web_search_checkbox.setStyleSheet(
+            "QCheckBox { color: #6c757d; font-size: 12px; }"
+        )
+        self.web_search_checkbox.setChecked(
+            bool(self._load_settings().get("web_search", False))
+        )
+        self.web_search_checkbox.toggled.connect(self._on_web_search_toggled)
+        footer_layout.addWidget(self.web_search_checkbox)
+
         # Выбор модели
         self.model_label = QLabel(t("model"))
         self.model_label.setStyleSheet("color: #6c757d; font-size: 12px;")
@@ -1544,6 +1558,14 @@ class OverlayWindow(QMainWindow):
                     self.model_combo.setCurrentIndex(i)
                     break
 
+    def _on_web_search_toggled(self, checked: bool):
+        """Переключение веб-поиска"""
+        settings = self._load_settings()
+        settings["web_search"] = bool(checked)
+        self._save_settings(settings)
+        if self.gpt_client:
+            self.gpt_client.set_web_search(bool(checked))
+
     def _on_model_changed(self, index: int):
         """Обработчик смены модели"""
         if index < 0:
@@ -1673,6 +1695,8 @@ class OverlayWindow(QMainWindow):
         self.clear_btn.setText(t("clear_chat"))
         self.feedback_btn.setText(t("send_feedback"))
         self.model_label.setText(t("model"))
+        self.web_search_checkbox.setText(t("web_search"))
+        self.web_search_checkbox.setToolTip(t("web_search_tooltip"))
         self.settings_btn.setToolTip(t("settings"))
 
         # Обновляем контекст если не определён
