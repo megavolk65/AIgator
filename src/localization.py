@@ -69,6 +69,26 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
         "en": "⚙️ Open settings and enter your API key",
     },
     "api_provider": {"ru": "API провайдер", "en": "API Provider"},
+    "connect_openrouter": {
+        "ru": "🔗 Подключить OpenRouter в 1 клик",
+        "en": "🔗 Connect OpenRouter in 1 click",
+    },
+    "connect_openrouter_hint": {
+        "ru": "Откроется браузер: войдите через Google — ключ подставится сам",
+        "en": "Browser will open: sign in with Google — the key fills in automatically",
+    },
+    "oauth_waiting": {
+        "ru": "⏳ Ожидание подтверждения в браузере…",
+        "en": "⏳ Waiting for confirmation in the browser…",
+    },
+    "oauth_success": {
+        "ru": "✅ Ключ получен, бесплатные модели добавлены! Нажмите «Сохранить»",
+        "en": "✅ Key received, free models added! Click Save",
+    },
+    "oauth_error": {
+        "ru": "❌ Не удалось подключить:",
+        "en": "❌ Connection failed:",
+    },
     "provider_openrouter": {
         "ru": "OpenRouter (международный)",
         "en": "OpenRouter (international)",

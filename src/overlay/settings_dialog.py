@@ -20,13 +20,41 @@ from PyQt6.QtWidgets import (
     QFrame,
     QComboBox,
 )
-from PyQt6.QtCore import Qt, pyqtSignal, QUrl
+from PyQt6.QtCore import Qt, pyqtSignal, QUrl, QThread
 from PyQt6.QtGui import QKeySequence, QDesktopServices
 import json
 import os
 import sys
+import threading
 
 from src.localization import t
+
+
+class OAuthWorker(QThread):
+    """Фоновый поток OAuth PKCE подключения OpenRouter"""
+
+    success = pyqtSignal(str, list)  # api_key, [(model_id, display_name), ...]
+    failed = pyqtSignal(str)
+
+    def __init__(self):
+        super().__init__()
+        self._stop_event = threading.Event()
+
+    def stop(self):
+        """Прервать ожидание (закрытие диалога)"""
+        self._stop_event.set()
+
+    def run(self):
+        try:
+            from src.ai.openrouter_oauth import perform_oauth, pick_free_models
+
+            key = perform_oauth(stop_event=self._stop_event)
+            models = pick_free_models()
+            self.success.emit(key, models)
+        except InterruptedError:
+            pass  # отмена — молча
+        except Exception as e:
+            self.failed.emit(str(e))
 
 
 class SettingsDialog(QDialog):
@@ -37,13 +65,22 @@ class SettingsDialog(QDialog):
     def __init__(self, parent=None, current_settings=None):
         super().__init__(parent)
         self.current_settings = current_settings or {}
+
+        # Ключи по-провайдерно (легаси api_key приписываем текущему провайдеру)
+        self._provider_keys = dict(self.current_settings.get("api_keys") or {})
+        legacy_key = self.current_settings.get("api_key", "")
+        legacy_provider = self.current_settings.get("api_provider", "openrouter")
+        if legacy_key and not self._provider_keys.get(legacy_provider):
+            self._provider_keys[legacy_provider] = legacy_key
+        self._active_key_provider = None  # чей ключ сейчас в поле
+
         self._init_ui()
         self._load_current_settings()
 
     def _init_ui(self):
         """Инициализация интерфейса"""
         self.setWindowTitle(t("settings"))
-        self.setFixedSize(500, 585)
+        self.setFixedSize(500, 660)
         self.setWindowFlags(
             self.windowFlags() & ~Qt.WindowType.WindowContextHelpButtonHint
         )
@@ -87,6 +124,30 @@ class SettingsDialog(QDialog):
         key_layout.addWidget(self.show_key_btn)
 
         api_layout.addLayout(key_layout)
+
+        # Кнопка OAuth-подключения OpenRouter (видна только для OpenRouter)
+        self.oauth_btn = QPushButton(t("connect_openrouter"))
+        self.oauth_btn.setToolTip(t("connect_openrouter_hint"))
+        self.oauth_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.oauth_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #2e7d32;
+                font-weight: bold;
+                padding: 10px;
+            }
+            QPushButton:hover { background-color: #388e3c; }
+            QPushButton:disabled { background-color: #3a3a5a; color: #888888; }
+        """)
+        self.oauth_btn.clicked.connect(self._start_oauth)
+        api_layout.addWidget(self.oauth_btn)
+
+        self.oauth_status = QLabel("")
+        self.oauth_status.setStyleSheet("color: #8899aa; font-size: 11px;")
+        self.oauth_status.setWordWrap(True)
+        self.oauth_status.hide()
+        api_layout.addWidget(self.oauth_status)
+
+        self._oauth_worker = None
 
         layout.addWidget(api_group)
 
@@ -255,6 +316,68 @@ class SettingsDialog(QDialog):
         else:
             self.api_key_input.setPlaceholderText("sk-...")
 
+        # Ключи храним по-провайдерно: запоминаем текущий, показываем нужный
+        if self._active_key_provider and self._active_key_provider != provider:
+            self._provider_keys[self._active_key_provider] = (
+                self.api_key_input.text().strip()
+            )
+        self.api_key_input.setText(self._provider_keys.get(provider, ""))
+        self._active_key_provider = provider
+
+        # OAuth-кнопка — только для OpenRouter
+        if hasattr(self, "oauth_btn"):
+            self.oauth_btn.setVisible(provider == "openrouter")
+            if provider != "openrouter":
+                self.oauth_status.hide()
+
+    # === OAuth подключение OpenRouter ===
+
+    def _start_oauth(self):
+        """Запустить OAuth-флоу в фоне"""
+        if self._oauth_worker and self._oauth_worker.isRunning():
+            return
+
+        self.oauth_btn.setEnabled(False)
+        self.oauth_status.setText(t("oauth_waiting"))
+        self.oauth_status.show()
+
+        self._oauth_worker = OAuthWorker()
+        self._oauth_worker.success.connect(self._on_oauth_success)
+        self._oauth_worker.failed.connect(self._on_oauth_failed)
+        self._oauth_worker.start()
+
+    def _on_oauth_success(self, api_key: str, models: list):
+        """Ключ получен — заполняем поле и добавляем бесплатные модели"""
+        self.api_key_input.setText(api_key)
+
+        # Добавляем модели, которых ещё нет в списке
+        existing = set()
+        for i in range(self.models_layout_inner.count()):
+            widget = self.models_layout_inner.itemAt(i).widget()
+            if widget and isinstance(widget, QFrame):
+                existing.add(widget.property("model_id"))
+
+        for model_id, display_name in models:
+            if model_id not in existing:
+                self._add_model_item(model_id, display_name)
+
+        self.oauth_btn.setEnabled(True)
+        self.oauth_status.setText(t("oauth_success"))
+        self.oauth_status.setStyleSheet("color: #81c784; font-size: 11px;")
+
+    def _on_oauth_failed(self, error: str):
+        """OAuth не удался"""
+        self.oauth_btn.setEnabled(True)
+        self.oauth_status.setText(f"{t('oauth_error')} {error[:120]}")
+        self.oauth_status.setStyleSheet("color: #ff6b6b; font-size: 11px;")
+
+    def done(self, result):
+        """Закрытие диалога — останавливаем OAuth, если ждёт"""
+        if self._oauth_worker and self._oauth_worker.isRunning():
+            self._oauth_worker.stop()
+            self._oauth_worker.wait(3000)
+        super().done(result)
+
     def _load_current_settings(self):
         """Загрузить текущие настройки в поля"""
         # API провайдер
@@ -263,9 +386,7 @@ class SettingsDialog(QDialog):
         if index >= 0:
             self.provider_combo.setCurrentIndex(index)
 
-        # API ключ
-        api_key = self.current_settings.get("api_key", "")
-        self.api_key_input.setText(api_key)
+        # API ключ подставляется в _on_provider_changed из _provider_keys
 
         # Модели
         models = self.current_settings.get("models", [])
@@ -286,6 +407,9 @@ class SettingsDialog(QDialog):
         # Телеметрия (по умолчанию включена)
         telemetry_enabled = self.current_settings.get("telemetry_enabled", True)
         self.telemetry_checkbox.setChecked(bool(telemetry_enabled))
+
+        # Видимость OAuth-кнопки под текущего провайдера
+        self._on_provider_changed(self.provider_combo.currentIndex())
 
     def _add_model_item(self, model_id: str, display_name: str):
         """Добавить элемент модели с кнопкой удаления"""
@@ -410,11 +534,15 @@ class SettingsDialog(QDialog):
         # Телеметрия
         telemetry_enabled = self.telemetry_checkbox.isChecked()
 
-        # Формируем настройки
+        # Ключи по-провайдерно (текущее поле — ключ выбранного провайдера)
+        self._provider_keys[api_provider] = api_key
+
+        # Формируем настройки (api_key — легаси-поле для обратной совместимости)
         new_settings = {
             **self.current_settings,
             "api_provider": api_provider,
             "api_key": api_key,
+            "api_keys": dict(self._provider_keys),
             "models": models,
             "hotkey_overlay": hotkey_overlay,
             "hotkey_screenshot": hotkey_screenshot,

@@ -29,15 +29,13 @@ class OpenRouterClient:
         # Загружаем настройки
         settings = self._load_settings()
 
-        self.api_key = settings.get("api_key", "")
-        if not self.api_key:
-            self.api_key = getattr(config, "OPENROUTER_API_KEY", "")
-
         # Определяем base_url по провайдеру
         self.api_provider = settings.get("api_provider", "openrouter")
         self.base_url = PROVIDER_URLS.get(
             self.api_provider, PROVIDER_URLS["openrouter"]
         )
+
+        self.api_key = self._resolve_api_key(settings, self.api_provider)
 
         self.model_name = getattr(
             config, "OPENROUTER_MODEL", "google/gemma-3-27b-it:free:online"
@@ -59,14 +57,25 @@ class OpenRouterClient:
         except:
             return {}
 
+    @staticmethod
+    def _resolve_api_key(settings: dict, provider: str) -> str:
+        """Ключ провайдера: сначала api_keys[provider], потом легаси api_key"""
+        per_provider = settings.get("api_keys") or {}
+        key = per_provider.get(provider, "")
+        if not key:
+            key = settings.get("api_key", "")
+        if not key:
+            key = getattr(config, "OPENROUTER_API_KEY", "")
+        return key
+
     def reload_settings(self):
         """Перезагрузить настройки (при смене провайдера)"""
         settings = self._load_settings()
-        self.api_key = settings.get("api_key", "")
         self.api_provider = settings.get("api_provider", "openrouter")
         self.base_url = PROVIDER_URLS.get(
             self.api_provider, PROVIDER_URLS["openrouter"]
         )
+        self.api_key = self._resolve_api_key(settings, self.api_provider)
         self.web_search = bool(settings.get("web_search", False))
 
     def set_web_search(self, enabled: bool):
