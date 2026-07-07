@@ -20,6 +20,15 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import config
 
 
+def _detect_system_language() -> str:
+    """Язык интерфейса Windows: русский → ru, всё остальное → en"""
+    try:
+        lang_id = ctypes.windll.kernel32.GetUserDefaultUILanguage()
+        return "ru" if (lang_id & 0x3FF) == 0x19 else "en"
+    except Exception:
+        return "en"
+
+
 def _ensure_settings():
     """Создать settings.json из default если не существует"""
     settings_path = config.get_settings_path()
@@ -49,18 +58,22 @@ def _ensure_settings():
     if not os.path.exists(settings_path):
         if os.path.exists(default_path):
             shutil.copy(default_path, settings_path)
+            # Язык — по языку системы, а не из шаблона
+            try:
+                import json
+
+                with open(settings_path, "r", encoding="utf-8") as f:
+                    fresh = json.load(f)
+                fresh["language"] = _detect_system_language()
+                with open(settings_path, "w", encoding="utf-8") as f:
+                    json.dump(fresh, f, ensure_ascii=False, indent=2)
+            except Exception:
+                pass
         else:
             # Если даже дефолтного нет, создаем минимальный набор
             import json
-            import locale
 
-            # Определяем язык системы
-            try:
-                sys_lang = (
-                    "ru" if "Russian" in (locale.getdefaultlocale()[0] or "") else "en"
-                )
-            except:
-                sys_lang = "ru"
+            sys_lang = _detect_system_language()
 
             default_settings = {
                 "selected_model": "",

@@ -82,18 +82,52 @@ class OpenRouterClient:
         """Включить/выключить платный веб-поиск"""
         self.web_search = bool(enabled)
 
-    def send_message(self, text: str, screenshot_context: str = "") -> str:
+    # Сколько сообщений держим в истории (не считая системного промпта)
+    MAX_HISTORY_MESSAGES = 20
+
+    def _scrub_old_images(self):
+        """
+        Заменить старые скриншоты в истории текстовой пометкой.
+        Без этого каждый base64-скриншот пересылался бы со ВСЕМИ
+        последующими запросами (мегабайты и деньги впустую).
+        """
+        for msg in self.history:
+            content = msg.get("content")
+            if isinstance(content, list):
+                texts = [
+                    p.get("text", "")
+                    for p in content
+                    if isinstance(p, dict) and p.get("type") == "text"
+                ]
+                text = "\n".join(x for x in texts if x)
+                msg["content"] = (
+                    f"{text}\n[a screenshot was attached to this message]".strip()
+                )
+
+    def _trim_history(self):
+        """Ограничить историю, сохранив системный промпт"""
+        system = [m for m in self.history if m.get("role") == "system"]
+        rest = [m for m in self.history if m.get("role") != "system"]
+        if len(rest) > self.MAX_HISTORY_MESSAGES:
+            rest = rest[-self.MAX_HISTORY_MESSAGES :]
+            self.history = system[:1] + rest
+
+    def send_message(self, text: str, screenshot_context: str = "", on_chunk=None) -> str:
         """
         Отправить текстовое сообщение
 
         Args:
             text: Текст сообщения
             screenshot_context: Контекст из скриншота (OCR)
+            on_chunk: Колбэк стриминга — вызывается с накопленным текстом
 
         Returns:
             Ответ от модели
         """
         try:
+            self._scrub_old_images()
+            self._trim_history()
+
             # Формируем сообщение
             user_message = text
             if screenshot_context:
@@ -103,7 +137,7 @@ class OpenRouterClient:
             self.history.append({"role": "user", "content": user_message})
 
             # Отправляем запрос
-            response = self._make_request(self.history)
+            response = self._make_request(self.history, on_chunk=on_chunk)
 
             # Добавляем ответ в историю
             self.history.append({"role": "assistant", "content": response})
@@ -149,19 +183,25 @@ class OpenRouterClient:
 
         return buffer.getvalue(), "image/jpeg"
 
-    def send_request(self, prompt: str, image_data: Optional[bytes] = None) -> str:
+    def send_request(
+        self, prompt: str, image_data: Optional[bytes] = None, on_chunk=None
+    ) -> str:
         """
         Отправить запрос с возможным изображением
 
         Args:
             prompt: Текст запроса
             image_data: Байты изображения (PNG/JPEG)
+            on_chunk: Колбэк стриминга — вызывается с накопленным текстом
 
         Returns:
             Ответ от модели
         """
         try:
             if image_data:
+                self._scrub_old_images()
+                self._trim_history()
+
                 # Сжимаем изображение
                 compressed_data, mime_type = self._compress_image(image_data)
 
@@ -187,7 +227,7 @@ class OpenRouterClient:
                 )
 
                 # Отправляем запрос
-                response = self._make_request(self.history)
+                response = self._make_request(self.history, on_chunk=on_chunk)
 
                 # Добавляем ответ
                 self.history.append({"role": "assistant", "content": response})
@@ -195,17 +235,18 @@ class OpenRouterClient:
                 return response
             else:
                 # Обычный текстовый запрос
-                return self.send_message(prompt)
+                return self.send_message(prompt, on_chunk=on_chunk)
 
         except Exception as e:
             return f"❌ Ошибка OpenRouter: {str(e)}"
 
-    def _make_request(self, messages: list) -> str:
+    def _make_request(self, messages: list, on_chunk=None) -> str:
         """
         Выполнить HTTP запрос к OpenRouter API
 
         Args:
             messages: История сообщений
+            on_chunk: Если задан — стриминг: колбэк получает накопленный текст
 
         Returns:
             Ответ от модели
@@ -226,6 +267,12 @@ class OpenRouterClient:
         if self.web_search:
             payload["plugins"] = [{"id": "web", "max_results": 5}]
 
+        if on_chunk is not None:
+            return self._request_streaming(headers, payload, on_chunk)
+        return self._request_plain(headers, payload)
+
+    def _request_plain(self, headers: dict, payload: dict) -> str:
+        """Обычный (нестриминговый) запрос"""
         response = requests.post(
             f"{self.base_url}/chat/completions",
             headers=headers,
@@ -239,19 +286,71 @@ class OpenRouterClient:
         if "choices" in result and len(result["choices"]) > 0:
             message = result["choices"][0]["message"]
             content = message.get("content", "")
-
-            # Ссылки-источники от веб-плагина (annotations -> url_citation)
-            sources = self._extract_sources(message)
-            if sources:
-                from src.localization import t
-
-                content += f"\n\n**{t('sources')}:**\n" + "\n".join(
-                    f"- [{title}]({url})" for url, title in sources
-                )
-
-            return content
+            return content + self._format_sources(self._extract_sources(message))
         else:
             raise Exception(f"Неожиданный ответ API: {result}")
+
+    def _request_streaming(self, headers: dict, payload: dict, on_chunk) -> str:
+        """Стриминговый запрос (SSE): on_chunk получает накопленный текст"""
+        payload = dict(payload)
+        payload["stream"] = True
+
+        content = ""
+        annotations = []
+
+        with requests.post(
+            f"{self.base_url}/chat/completions",
+            headers=headers,
+            json=payload,
+            stream=True,
+            timeout=120,
+        ) as response:
+            response.raise_for_status()
+            response.encoding = "utf-8"
+
+            for line in response.iter_lines(decode_unicode=True):
+                if not line or not line.startswith("data: "):
+                    continue
+                data = line[len("data: ") :]
+                if data == "[DONE]":
+                    break
+                try:
+                    obj = json.loads(data)
+                except ValueError:
+                    continue
+
+                choices = obj.get("choices") or [{}]
+                delta = choices[0].get("delta") or {}
+
+                piece = delta.get("content") or ""
+                if piece:
+                    content += piece
+                    try:
+                        on_chunk(content)
+                    except Exception:
+                        pass
+
+                anns = delta.get("annotations")
+                if anns:
+                    annotations.extend(anns)
+
+        if not content:
+            raise Exception("Пустой стриминговый ответ API")
+
+        return content + self._format_sources(
+            self._extract_sources({"annotations": annotations})
+        )
+
+    @staticmethod
+    def _format_sources(sources: list) -> str:
+        """Отформатировать блок «Источники» (пустая строка, если их нет)"""
+        if not sources:
+            return ""
+        from src.localization import t
+
+        return f"\n\n**{t('sources')}:**\n" + "\n".join(
+            f"- [{title}]({url})" for url, title in sources
+        )
 
     @staticmethod
     def _extract_sources(message: dict) -> list:

@@ -248,12 +248,16 @@ class AIWorker(QThread):
             # Если есть изображение - используем send_request
             if self.image_data:
                 response = self.gpt_client.send_request(
-                    self.message, image_data=self.image_data
+                    self.message,
+                    image_data=self.image_data,
+                    on_chunk=self.response_chunk.emit,
                 )
             else:
                 # Иначе обычный текстовый запрос
                 response = self.gpt_client.send_message(
-                    self.message, screenshot_context=self.screenshot_context
+                    self.message,
+                    screenshot_context=self.screenshot_context,
+                    on_chunk=self.response_chunk.emit,
                 )
             self.response_ready.emit(response)
         except Exception as e:
@@ -878,6 +882,12 @@ class OverlayWindow(QMainWindow):
 
     def _update_chat_display(self):
         """Обновить отображение чата"""
+        # Запоминаем позицию скролла: если пользователь читал выше —
+        # не утаскиваем его вниз при перерисовке
+        scrollbar = self.chat_display.verticalScrollBar()
+        was_at_bottom = scrollbar.value() >= scrollbar.maximum() - 10
+        old_position = scrollbar.value()
+
         html = f"""
         <!DOCTYPE html>
         <html>
@@ -891,10 +901,13 @@ class OverlayWindow(QMainWindow):
         """
         self.chat_display.setHtml(html)
 
-        # Прокрутка вниз
-        cursor = self.chat_display.textCursor()
-        cursor.movePosition(QTextCursor.MoveOperation.End)
-        self.chat_display.setTextCursor(cursor)
+        if was_at_bottom:
+            # Прокрутка вниз
+            cursor = self.chat_display.textCursor()
+            cursor.movePosition(QTextCursor.MoveOperation.End)
+            self.chat_display.setTextCursor(cursor)
+        else:
+            scrollbar.setValue(min(old_position, scrollbar.maximum()))
 
     def _add_message(self, role: str, text: str):
         """Добавить сообщение в чат"""
@@ -1012,6 +1025,9 @@ class OverlayWindow(QMainWindow):
                     f"[Активное окно: {self._current_app_context}]\n{text}"
                 )
 
+            self._stream_placeholder = None
+            self._last_stream_ts = 0.0
+
             self._worker = AIWorker(
                 self.gpt_client,
                 message_with_context,
@@ -1019,6 +1035,7 @@ class OverlayWindow(QMainWindow):
                 self._current_screenshot_bytes,  # Передаём байты изображения
             )
             self._worker.response_ready.connect(self._on_response)
+            self._worker.response_chunk.connect(self._on_response_chunk)
             self._worker.error_occurred.connect(self._on_error)
             self._worker.start()
         else:
@@ -1030,9 +1047,50 @@ class OverlayWindow(QMainWindow):
         # Сбрасываем контекст скриншота
         self._remove_screenshot()
 
+    def _on_response_chunk(self, text: str):
+        """Стриминг: показываем растущий ответ (обновление не чаще 6-7 раз/с)"""
+        import time
+
+        if self._thinking_timer:
+            self._stop_thinking_animation()
+
+        now = time.monotonic()
+        if (
+            getattr(self, "_stream_placeholder", None)
+            and now - getattr(self, "_last_stream_ts", 0.0) < 0.15
+        ):
+            return  # финальный ответ всё равно перерисует целиком
+        self._last_stream_ts = now
+
+        html_text = self._markdown_to_html(text)
+        new_placeholder = f"""
+        <div class="message assistant-message">
+            <div class="message-header">AIgator</div>
+            <div class="message-content">{html_text}<span style="color: #888888;">▌</span></div>
+        </div>
+        """
+
+        if getattr(self, "_stream_placeholder", None):
+            self._chat_history_html = self._chat_history_html.replace(
+                self._stream_placeholder, new_placeholder
+            )
+        else:
+            self._chat_history_html += new_placeholder
+        self._stream_placeholder = new_placeholder
+        self._update_chat_display()
+
+    def _remove_stream_placeholder(self):
+        """Убрать временное стриминговое сообщение из чата"""
+        if getattr(self, "_stream_placeholder", None):
+            self._chat_history_html = self._chat_history_html.replace(
+                self._stream_placeholder, ""
+            )
+            self._stream_placeholder = None
+
     def _on_response(self, response: str):
         """Получен ответ от AI"""
         self._stop_thinking_animation()
+        self._remove_stream_placeholder()
         self._add_message("assistant", response)
         self._set_input_enabled(True)
         # Обновляем баланс после ответа
@@ -1041,6 +1099,7 @@ class OverlayWindow(QMainWindow):
     def _on_error(self, error: str):
         """Произошла ошибка"""
         self._stop_thinking_animation()
+        self._remove_stream_placeholder()
         self._add_message("assistant", f"❌ Ошибка: {error}")
         self._set_input_enabled(True)
 
@@ -1105,7 +1164,7 @@ class OverlayWindow(QMainWindow):
         if not enabled:
             self.send_btn.setText("⌛")
         else:
-            self.send_btn.setText("Отправить")
+            self.send_btn.setText(t("send"))
 
     def _on_screenshot_click(self):
         """Клик по кнопке скриншота"""
