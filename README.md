@@ -1,4 +1,4 @@
-[🇬🇧 English](README.md) | [🇷🇺 Русский](README_RU.md)
+[🇬🇧 English](README_EN.md) | [🇷🇺 Русский](README.md)
 
 # <img src="assets/icon_256.png" alt="" width="32"> AIgator
 
@@ -7,8 +7,8 @@
 </p>
 
 <p align="center">
-  <strong>AI assistant overlay for games</strong><br>
-  Press a hotkey in any game — ask a question, attach a screenshot, get an answer. No Alt-Tab.
+  <strong>AI-ассистент поверх игры</strong><br>
+  Нажмите горячую клавишу в любой игре — задайте вопрос, приложите скриншот, получите ответ. Без Alt-Tab.
 </p>
 
 <p align="center">
@@ -17,60 +17,62 @@
   <img src="https://img.shields.io/badge/Platform-Windows-lightgrey" alt="Platform">
 </p>
 
-## Quick Start
+## Быстрый старт
 
-1. **Download** `AIgator_Setup_x.x.x.exe` from [Releases](https://github.com/megavolk65/AIgator/releases) and run it.
-2. On first launch the **setup wizard** opens. Pick your path:
-   - 🆓 **Try for free** — click *Connect OpenRouter*, sign in with Google, done.
-     Free models that understand screenshots are added automatically.
-     Their quality may be modest — or may be all you need.
-   - 💳 **Paid models** — the same one-click connection, then top up your
-     [OpenRouter balance](https://openrouter.ai/credits) to unlock the full model catalog.
-3. In a game, press **PageUp** — the overlay appears. **PageDown** — take a screenshot and ask about it.
+1. **Скачайте** `AIgator_Setup_x.x.x.exe` из [Releases](https://github.com/megavolk65/AIgator/releases) и запустите.
+2. При первом запуске откроется **мастер настройки**. Выберите свой путь:
+   - 🆓 **Попробовать бесплатно** — нажмите *«Подключить OpenRouter»*, войдите
+     через Google — и всё. Бесплатные модели (понимают скриншоты) добавятся сами.
+     Качество ответов может не впечатлить — а может, вам и хватит. VPN не нужен.
+   - 💳 **Платить рублями** — [RouterAI](https://routerai.ru): карты любых
+     российских банков и СБП, качественные платные модели. Мастер проведёт по шагам.
+   - 🌍 **OpenRouter платно** — то же подключение в один клик + пополнение
+     [баланса](https://openrouter.ai/credits) зарубежной картой: весь каталог моделей мира.
+3. В игре нажмите **PageUp** — появится оверлей. **PageDown** — скриншот + вопрос по нему.
 
-## What it can do
+## Что умеет
 
-- 🎮 Works on top of any game or app (borderless / windowed mode)
-- 📷 Understands screenshots: *"How do I beat this boss?"*, *"What is this item?"*
-- 🧠 Detects which game you're playing — no need to mention it in your question
-- ⚡ Streaming answers — text appears as it's generated
-- 🌐 Built-in browser: open links from answers without leaving the game
-- 🔎 Optional web search with source links (paid, ~$0.02 per question — off by default)
-- 🔒 Anti-cheat safe: standard Windows overlay, no injection, no memory reading
-- ⚠️ AI can still get game facts wrong — enable web search or check the sources
-  in the built-in browser when it matters
+- 🎮 Работает поверх любой игры и программы (режим «без рамок» / «в окне»)
+- 📷 Понимает скриншоты: *«Как пройти это место?»*, *«Что за предмет?»*
+- 🧠 Сам определяет, во что вы играете — не нужно упоминать игру в вопросе
+- ⚡ Стриминг: ответ появляется по мере генерации
+- 🌐 Встроенный браузер — ссылки из ответов открываются без выхода из игры
+- 🔎 Веб-поиск со ссылками на источники (платно, ~2 ₽ за вопрос — по умолчанию выключен)
+- 🔒 Безопасно для античитов: стандартный Windows-оверлей, без инжекта и чтения памяти
+- ⚠️ ИИ может ошибаться в игровых фактах — включайте веб-поиск или проверяйте
+  источники во встроенном браузере, когда это важно
 
-## Hotkeys
+## Горячие клавиши
 
-| Key | Action |
+| Клавиша | Действие |
 |---|---|
-| `PageUp` | Show / hide the overlay |
-| `PageDown` | Screenshot + attach to your question |
-| `Esc` | Hide the overlay |
+| `PageUp` | Показать / скрыть оверлей |
+| `PageDown` | Скриншот + прикрепить к вопросу |
+| `Esc` | Скрыть оверлей |
 
-Hotkeys can be changed in settings (⚙).
+Клавиши меняются в настройках (⚙).
 
-> ⚠️ **Exclusive fullscreen:** the overlay cannot appear on top of the game.
-> Use **Borderless** or **Windowed** display mode.
+> ⚠️ **Эксклюзивный полный экран:** оверлей не сможет отобразиться поверх игры.
+> Используйте режим **«Окно без рамок»** (Borderless) или **«В окне»**.
 
-## Privacy
+## Приватность
 
-Once a day the app sends an anonymous ping: the app version and a first-launch flag —
-**nothing else**. No identifiers, no personal data, no chat content.
-You can turn it off in settings. The backend source is public:
+Раз в сутки приложение отправляет анонимный пинг: номер версии и флаг первого
+запуска — **и больше ничего**. Ни идентификаторов, ни личных данных, ни содержимого
+чатов. Отключается в настройках. Исходник бэкенда открыт:
 [`telemetry_backend/apps_script.js`](telemetry_backend/apps_script.js).
 
 <details>
-<summary><strong>Anti-cheat safety details</strong></summary>
+<summary><strong>Подробнее про античиты</strong></summary>
 
-- Standard Windows overlay window — same approach as Discord or Steam overlays
-- No injection into game processes, no reading of game memory
-- Screenshots via the standard Windows API
-- Global hotkeys via `RegisterHotKey` (no keyboard hooks)
+- Стандартное Windows-окно поверх игры — тот же подход, что у оверлеев Discord и Steam
+- Никакого инжекта в процессы игр и чтения их памяти
+- Скриншоты — через стандартный Windows API
+- Глобальные горячие клавиши — через `RegisterHotKey` (без клавиатурных хуков)
 </details>
 
 <details>
-<summary><strong>Build from source</strong></summary>
+<summary><strong>Сборка из исходников</strong></summary>
 
 ```bash
 git clone https://github.com/megavolk65/AIgator.git
@@ -82,11 +84,11 @@ python main.py
 ```
 </details>
 
-## License
+## Лицензия
 
 MIT License
 
-## Author
+## Автор
 
 megavolk65 — [GitHub](https://github.com/megavolk65) • [Telegram](https://t.me/megavolk)
-Feedback: [@aigator_feedback_bot](https://t.me/aigator_feedback_bot)
+Обратная связь: [@aigator_feedback_bot](https://t.me/aigator_feedback_bot)
