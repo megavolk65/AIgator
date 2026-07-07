@@ -233,6 +233,13 @@ class SettingsDialog(QDialog):
 
         # === Кнопки ===
         buttons_layout = QHBoxLayout()
+
+        # Мастер настройки (слева)
+        wizard_btn = QPushButton(t("wizard_open"))
+        wizard_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        wizard_btn.clicked.connect(self._open_wizard)
+        buttons_layout.addWidget(wizard_btn)
+
         buttons_layout.addStretch()
 
         self.cancel_btn = QPushButton(t("cancel"))
@@ -298,6 +305,13 @@ class SettingsDialog(QDialog):
         """)
 
         self.save_btn.setObjectName("saveBtn")
+
+    def _open_wizard(self):
+        """Закрыть настройки и открыть мастер"""
+        parent = self.parent()
+        self.close()
+        if parent is not None and hasattr(parent, "open_setup_wizard"):
+            parent.open_setup_wizard()
 
     def _toggle_key_visibility(self, checked):
         """Переключить видимость API ключа"""

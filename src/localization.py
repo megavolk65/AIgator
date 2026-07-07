@@ -97,6 +97,68 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
         "ru": "RouterAI (оплата в рублях)",
         "en": "RouterAI (payment in rubles)",
     },
+    # === Мастер настройки ===
+    "wizard_title": {"ru": "Мастер настройки", "en": "Setup Wizard"},
+    "wizard_welcome": {"ru": "Как хотите начать?", "en": "How would you like to start?"},
+    "wizard_free_btn": {"ru": "🆓  Попробовать бесплатно", "en": "🆓  Try for free"},
+    "wizard_free_desc": {
+        "ru": "Бесплатные модели OpenRouter. Качество может не впечатлить — а может, вам и хватит. Нужна только регистрация через Google.",
+        "en": "Free OpenRouter models. Quality may be modest — or may be all you need. Just a Google sign-in required.",
+    },
+    "wizard_rub_btn": {"ru": "💳  Платить рублями", "en": "💳  Pay in rubles"},
+    "wizard_rub_desc": {
+        "ru": "RouterAI: качественные платные модели, карты любых российских банков, СБП.",
+        "en": "RouterAI: quality paid models, Russian bank cards.",
+    },
+    "wizard_paid_btn": {"ru": "🌍  OpenRouter платно", "en": "💳  Use paid models"},
+    "wizard_paid_desc": {
+        "ru": "Весь каталог моделей мира. Понадобится зарубежная карта для пополнения.",
+        "en": "The world's full model catalog on OpenRouter.",
+    },
+    "wizard_self_link": {
+        "ru": "Я разберусь сам — открыть настройки",
+        "en": "I'll figure it out — open settings",
+    },
+    "wizard_back": {"ru": "← Назад", "en": "← Back"},
+    "wizard_finish": {"ru": "✅ Готово, начать пользоваться!", "en": "✅ Done, start using!"},
+    "wizard_free_title": {"ru": "Бесплатный старт", "en": "Free start"},
+    "wizard_paid_title": {"ru": "OpenRouter — платные модели", "en": "OpenRouter — paid models"},
+    "wizard_oauth_note": {
+        "ru": "Нажмите кнопку — откроется браузер. Войдите через Google и разрешите доступ: ключ подставится сам, а мы добавим проверенные бесплатные модели (обе понимают скриншоты).",
+        "en": "Click the button — a browser will open. Sign in with Google and authorize: the key fills in automatically and we'll add proven free models (both understand screenshots).",
+    },
+    "wizard_or_topup": {
+        "ru": "Когда ключ получен — пополните баланс, чтобы открылись платные модели:",
+        "en": "Once the key is received, top up your balance to unlock paid models:",
+    },
+    "wizard_ra_title": {"ru": "RouterAI — оплата рублями", "en": "RouterAI — pay in rubles"},
+    "wizard_ra_step1": {
+        "ru": "1. Зарегистрируйтесь на сайте:",
+        "en": "1. Sign up at:",
+    },
+    "wizard_ra_step2": {
+        "ru": "2. Пополните баланс в личном кабинете (картой или СБП)",
+        "en": "2. Top up your balance in the dashboard",
+    },
+    "wizard_ra_step3": {
+        "ru": "3. Создайте API-ключ и вставьте его сюда:",
+        "en": "3. Create an API key and paste it here:",
+    },
+    "wizard_check_key": {"ru": "Проверить ключ", "en": "Verify key"},
+    "wizard_key_checking": {"ru": "⏳ Проверяем ключ…", "en": "⏳ Verifying key…"},
+    "wizard_key_ok": {
+        "ru": "✅ Ключ работает! Баланс: {balance} ₽. Добавим стартовые модели: {models}",
+        "en": "✅ Key works! Balance: {balance} ₽. Starter models: {models}",
+    },
+    "wizard_key_fail": {
+        "ru": "❌ Ключ не подошёл: {error}",
+        "en": "❌ Key rejected: {error}",
+    },
+    "wizard_websearch_q": {
+        "ru": "Включить веб-поиск: ответы точнее и со ссылками на источники (+~2 ₽ к каждому сообщению)",
+        "en": "Enable web search: more accurate answers with source links (~+$0.02 per message)",
+    },
+    "wizard_open": {"ru": "🧙 Мастер настройки", "en": "🧙 Setup wizard"},
     # === Трей ===
     "show": {"ru": "Показать", "en": "Show"},
     "exit": {"ru": "Выход", "en": "Exit"},

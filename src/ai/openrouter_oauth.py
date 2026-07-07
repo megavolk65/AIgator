@@ -12,6 +12,7 @@ OAuth PKCE подключение OpenRouter — получение API-ключ
 
 import base64
 import hashlib
+import re
 import secrets
 import time
 import webbrowser
@@ -129,7 +130,6 @@ _SKIP_MARKERS = ("safety", "guard", "coder", "code")
 # Фоллбэк, если каталог недоступен (актуален на июль 2026, все — vision)
 _FALLBACK_MODELS = [
     ("google/gemma-4-31b-it:free", "GOOGLE: Gemma 4 31B (free)"),
-    ("google/gemma-4-26b-a4b-it:free", "GOOGLE: Gemma 4 26B A4B (free)"),
     (
         "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
         "NVIDIA: Nemotron 3 Nano Omni (free)",
@@ -137,10 +137,24 @@ _FALLBACK_MODELS = [
 ]
 
 
-def pick_free_models(max_models: int = 3) -> list:
+def _family(model_id: str) -> str:
+    """Семейство модели: google/gemma-4-31b-it:free -> google/gemma"""
+    provider, _, name = model_id.partition("/")
+    base = re.split(r"[-_.\d]", name, 1)[0]
+    return f"{provider}/{base}"
+
+
+def _size_b(model_id: str) -> int:
+    """Размер модели в млрд параметров из id (31b -> 31), 0 если не нашли"""
+    sizes = [int(x) for x in re.findall(r"(\d+)b", model_id)]
+    return max(sizes) if sizes else 0
+
+
+def pick_free_models(max_models: int = 2) -> list:
     """
     Подобрать стартовые бесплатные модели из каталога OpenRouter.
-    Приоритет: vision (скриншоты!), большой контекст, известные вендоры.
+    Только vision (скриншоты — ключевая фича), не больше одной модели
+    из одного семейства (Gemma 26B и 31B рядом только путают).
 
     Returns:
         [(model_id, display_name), ...]
@@ -163,17 +177,28 @@ def pick_free_models(max_models: int = 3) -> list:
 
         def rank(m):
             provider_bonus = 1 if m["id"].startswith(("google/", "meta-llama/")) else 0
-            return (provider_bonus, m.get("context_length") or 0)
+            return (
+                provider_bonus,
+                _size_b(m["id"]),
+                m.get("context_length") or 0,
+            )
 
         vision.sort(key=rank, reverse=True)
         text_only.sort(key=rank, reverse=True)
 
-        # Скриншоты — ключевая фича: берём только vision-модели,
-        # текстовыми добиваем лишь если vision-моделей не хватает
-        picked = vision[:max_models]
-        if len(picked) < max_models:
-            picked += text_only[: max_models - len(picked)]
-        result = [(m["id"], m.get("name") or m["id"]) for m in picked[:max_models]]
+        # Vision в приоритете, текстовыми добиваем только при нехватке;
+        # из каждого семейства — одна (лучшая) модель
+        picked, seen_families = [], set()
+        for m in vision + text_only:
+            fam = _family(m["id"])
+            if fam in seen_families:
+                continue
+            seen_families.add(fam)
+            picked.append(m)
+            if len(picked) >= max_models:
+                break
+
+        result = [(m["id"], m.get("name") or m["id"]) for m in picked]
         return result or list(_FALLBACK_MODELS)
     except Exception:
         return list(_FALLBACK_MODELS)

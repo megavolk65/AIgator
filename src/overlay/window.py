@@ -34,6 +34,7 @@ sys.path.insert(
 
 from .styles import DARK_THEME, CHAT_MESSAGE_CSS
 from .settings_dialog import SettingsDialog
+from .setup_wizard import SetupWizard
 from .web_dialog import WebDialog
 import config
 
@@ -739,31 +740,33 @@ class OverlayWindow(QMainWindow):
 
         if lang == "ru":
             html = f"""
-            <div style="padding: 30px 25px 30px 20%;">
-                <div style="font-size: 17px; color: #cccccc; line-height: 1.7;">
+            <div style="padding: 40px 25px 30px 18%;">
+                <div style="font-size: 17px; color: #cccccc; line-height: 1.8;">
                     <br>
-                    Чтобы пользоваться программой <strong style="color: #ffffff;">бесплатно</strong> —
-                    зарегистрируйтесь на <a href="https://openrouter.ai/keys" style="color: #4fc3f7;">OpenRouter</a>
-                    и введите API-ключ в <a href="action://settings" style="color: #ff9800;">настройках</a>.<br>
+                    <strong style="color: #ffffff; font-size: 19px;">Добро пожаловать в AIgator!</strong><br>
                     <br>
-                    Если вас не устраивает качество ответов бесплатных моделей — можно добавить другие бесплатные или платные (более качественные) модели:<br>
-                    &bull; Российские карты — <a href="https://routerai.ru" style="color: #4fc3f7;">RouterAI</a><br>
-                    &bull; Зарубежные карты — <a href="https://openrouter.ai/keys" style="color: #4fc3f7;">OpenRouter</a>
+                    Чтобы начать — запустите
+                    <a href="action://wizard" style="color: #ff9800; font-weight: bold;">мастер настройки</a>:
+                    он за пару минут подключит бесплатные или платные модели.<br>
+                    <br>
+                    Опытные пользователи могут ввести API-ключ напрямую
+                    в <a href="action://settings" style="color: #4fc3f7;">настройках</a>.
                 </div>
             </div>
             """
         else:
             html = f"""
-            <div style="padding: 30px 25px 30px 20%;">
-                <div style="font-size: 17px; color: #cccccc; line-height: 1.7;">
+            <div style="padding: 40px 25px 30px 18%;">
+                <div style="font-size: 17px; color: #cccccc; line-height: 1.8;">
                     <br>
-                    To use the app for <strong style="color: #ffffff;">free</strong> —
-                    sign up at <a href="https://openrouter.ai/keys" style="color: #4fc3f7;">OpenRouter</a>
-                    and enter your API key in <a href="action://settings" style="color: #ff9800;">settings</a>.<br>
+                    <strong style="color: #ffffff; font-size: 19px;">Welcome to AIgator!</strong><br>
                     <br>
-                    You can also add other free or paid (higher quality) models:<br>
-                    &bull; Pay in $ — <a href="https://openrouter.ai/keys" style="color: #4fc3f7;">OpenRouter</a><br>
-                    &bull; Pay in ₽ — <a href="https://routerai.ru" style="color: #4fc3f7;">RouterAI</a>
+                    To get started, run the
+                    <a href="action://wizard" style="color: #ff9800; font-weight: bold;">setup wizard</a>:
+                    it connects free or paid models in a couple of minutes.<br>
+                    <br>
+                    Advanced users can enter an API key directly
+                    in <a href="action://settings" style="color: #4fc3f7;">settings</a>.
                 </div>
             </div>
             """
@@ -958,6 +961,9 @@ class OverlayWindow(QMainWindow):
         # Внутренние действия
         if url_str == "action://settings":
             self._open_settings()
+            return
+        if url_str == "action://wizard":
+            self.open_setup_wizard()
             return
         if url_str == "action://update":
             self._start_update_download()
@@ -1634,6 +1640,22 @@ class OverlayWindow(QMainWindow):
             settings["selected_model"] = model_id
             self._save_settings(settings)
 
+    def open_setup_wizard(self):
+        """Открыть мастер первого запуска"""
+        existing = getattr(self, "_setup_wizard", None)
+        if existing is not None and existing.isVisible():
+            existing.raise_()
+            existing.activateWindow()
+            return
+        if existing is not None:
+            existing.deleteLater()
+
+        wizard = SetupWizard(self, self._load_settings())
+        wizard.completed.connect(self._on_settings_saved)
+        wizard.open_settings.connect(self._open_settings)
+        self._setup_wizard = wizard
+        wizard.show()
+
     def _open_settings(self):
         """Открыть диалог настроек"""
         current_settings = self._load_settings()
@@ -1689,6 +1711,22 @@ class OverlayWindow(QMainWindow):
         # Обновляем список моделей
         if "models" in new_settings:
             self._refresh_models_combo()
+
+        # Выбираем модель, назначенную мастером/настройками
+        selected = new_settings.get("selected_model")
+        if selected:
+            for i in range(self.model_combo.count()):
+                if self.model_combo.itemData(i) == selected:
+                    self.model_combo.setCurrentIndex(i)
+                    break
+
+        # Синхронизируем галочку веб-поиска
+        if "web_search" in new_settings and hasattr(self, "web_search_checkbox"):
+            self.web_search_checkbox.blockSignals(True)
+            self.web_search_checkbox.setChecked(bool(new_settings["web_search"]))
+            self.web_search_checkbox.blockSignals(False)
+            if self.gpt_client:
+                self.gpt_client.set_web_search(bool(new_settings["web_search"]))
 
         # Обновляем горячие клавиши
         hotkey_overlay = new_settings.get(

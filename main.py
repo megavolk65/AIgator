@@ -116,6 +116,24 @@ class AIgatorApp(QObject):
         if not config.START_MINIMIZED:
             self.overlay.show()
 
+        # Первый запуск без настроенного API — показываем мастер
+        if not self._is_configured():
+            self.overlay.show()
+            QTimer.singleShot(400, self.overlay.open_setup_wizard)
+
+    @staticmethod
+    def _is_configured() -> bool:
+        """Есть ли хоть один API-ключ в настройках"""
+        import json
+
+        try:
+            with open(config.get_settings_path(), "r", encoding="utf-8") as f:
+                settings = json.load(f)
+            keys = settings.get("api_keys") or {}
+            return bool(settings.get("api_key") or any(keys.values()))
+        except Exception:
+            return False
+
     def _init_components(self):
         """Инициализация компонентов"""
         # Детектор контекста
